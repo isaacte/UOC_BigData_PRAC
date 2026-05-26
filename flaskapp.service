@@ -1,0 +1,12 @@
+[Unit]
+Description=Servidor Web Flask - Projecte Qualitat de l'Aire
+After=network.target
+
+[Service]
+User=ec2-user
+WorkingDirectory=/home/ec2-user/app_code
+ExecStart=/usr/bin/python3 -m flask run --host=0.0.0.0 --port=8080
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
