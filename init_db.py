@@ -37,296 +37,330 @@ def init_database():
         print(f"Error de connexió a MySQL: {e}")
         sys.exit(1)
 
-    print("Connexió establerta. Comprovant i creant taules si cal...")
+    print("Connexió establerta. Creant taules optimitzades només si no existeixen...")
 
-    # Llista de consultes SQL per crear les taules (l'ordre importa per les Foreign Keys)
-    taules_sql = [
-        """
-        CREATE TABLE IF NOT EXISTS global_variables
+    sql_commands = [
+        """CREATE TABLE IF NOT EXISTS unit
         (
             id
-            INT
-            PRIMARY
-            KEY
-            AUTO_INCREMENT,
-            start_date
-            DATE
-            NOT
-            NULL,
-            end_date
-            DATE
-            NOT
-            NULL,
-            is_running
             TINYINT
-        (
-            1
-        ) DEFAULT 1
-            );
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS batch_execution_log
-        (
-            id
-            INT
-            PRIMARY
-            KEY
-            AUTO_INCREMENT,
-            start_date
-            DATE,
-            end_date
-            DATE,
-            id_status
-            INT
-            DEFAULT
-            1,
-            update_date_status
-            DATETIME
-            DEFAULT
-            CURRENT_TIMESTAMP
-            ON
-            UPDATE
-            CURRENT_TIMESTAMP,
-            path_result_athena
-            VARCHAR
-        (
-            255
-        ),
-            log_s3 VARCHAR
-        (
-            255
-        ),
-            total_pollution_concentrations_added INT DEFAULT 0
-            );
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS unit
-        (
-            id
-            INT
+            NOT
+            NULL
             PRIMARY
             KEY
             AUTO_INCREMENT,
             name_units
             VARCHAR
-        (
-            50
-        ) UNIQUE NOT NULL
-            );
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS pollution_gas
+           (
+            10
+           )
+            );""",
+
+        """CREATE TABLE IF NOT EXISTS pollution_gas
         (
             id
-            INT
+            TINYINT
+            NOT
+            NULL
             PRIMARY
             KEY
             AUTO_INCREMENT,
             name_gas
             VARCHAR
-        (
-            50
-        ) UNIQUE NOT NULL,
-            magnitude INT,
-            id_unit INT,
+           (
+            10
+           ),
+            magnitude SMALLINT,
+            id_unit TINYINT NOT NULL,
             FOREIGN KEY
-        (
-            id_unit
-        ) REFERENCES unit
+           (
+               id_unit
+           ) REFERENCES unit
+           (
+               id
+           )
+            );""",
+
+        """CREATE TABLE IF NOT EXISTS station_type
         (
             id
-        )
-            );
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS station_type
-        (
-            id
-            INT
+            TINYINT
+            NOT
+            NULL
             PRIMARY
             KEY
             AUTO_INCREMENT,
             name_type
             VARCHAR
-        (
-            50
-        ) UNIQUE NOT NULL
-            );
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS urban_area
+           (
+            30
+           )
+            );""",
+
+        """CREATE TABLE IF NOT EXISTS urban_area
         (
             id
-            INT
+            TINYINT
+            NOT
+            NULL
             PRIMARY
             KEY
             AUTO_INCREMENT,
             name_area
             VARCHAR
-        (
-            50
-        ) UNIQUE NOT NULL
-            );
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS comarca
+           (
+            30
+           )
+            );""",
+
+        """CREATE TABLE IF NOT EXISTS comarca
         (
             id
-            INT
+            SMALLINT
+            NOT
+            NULL
             PRIMARY
             KEY
             AUTO_INCREMENT,
             code_comarca
-            INT
-            UNIQUE
-            NOT
-            NULL,
+            SMALLINT,
             name_comarca
             VARCHAR
-        (
-            100
-        ) NOT NULL
-            );
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS municipality
+           (
+            30
+           )
+            );""",
+
+        """CREATE TABLE IF NOT EXISTS municipality
         (
             id
-            INT
+            SMALLINT
+            NOT
+            NULL
             PRIMARY
             KEY
             AUTO_INCREMENT,
             ine_code
             VARCHAR
-        (
-            20
-        ) UNIQUE NOT NULL,
+           (
+            6
+           ),
             name_municipality VARCHAR
-        (
-            100
-        ) NOT NULL,
-            id_comarca INT,
+           (
+               30
+           ),
+            id_comarca SMALLINT NOT NULL,
             FOREIGN KEY
-        (
-            id_comarca
-        ) REFERENCES comarca
-        (
-            id
-        )
-            );
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS station
+           (
+               id_comarca
+           ) REFERENCES comarca
+           (
+               id
+           )
+            );""",
+
+        """CREATE TABLE IF NOT EXISTS station
         (
             id
             INT
+            NOT
+            NULL
             PRIMARY
             KEY
             AUTO_INCREMENT,
             eoi_code
             VARCHAR
-        (
-            20
-        ) UNIQUE NOT NULL,
+           (
+            10
+           ),
             name_station VARCHAR
-        (
-            150
-        ),
-            id_urban_area INT,
-            id_station_type INT,
-            id_municipality INT,
+           (
+               100
+           ),
+            id_urban_area TINYINT NOT NULL,
+            id_station_type TINYINT NOT NULL,
+            id_municipality SMALLINT NOT NULL,
             altitude INT,
-            latitude DECIMAL
-        (
-            10,
-            6
-        ),
-            longitude DECIMAL
-        (
-            10,
-            6
-        ),
+            latitude FLOAT,
+            longitude FLOAT,
             FOREIGN KEY
-        (
-            id_urban_area
-        ) REFERENCES urban_area
-        (
-            id
-        ),
+           (
+               id_urban_area
+           ) REFERENCES urban_area
+           (
+               id
+           ),
             FOREIGN KEY
-        (
-            id_station_type
-        ) REFERENCES station_type
-        (
-            id
-        ),
+           (
+               id_station_type
+           ) REFERENCES station_type
+           (
+               id
+           ),
             FOREIGN KEY
-        (
-            id_municipality
-        ) REFERENCES municipality
-        (
-            id
-        )
-            );
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS pollution_concentration
+           (
+               id_municipality
+           ) REFERENCES municipality
+           (
+               id
+           )
+            );""",
+
+        # Nota: He tret el AUTO_INCREMENT de id_station d'aquí perquè és una Foreign Key, no una Primary Key pròpia.
+        """CREATE TABLE IF NOT EXISTS pollution_concentration
         (
             id_station
-            INT,
+            INT
+            NOT
+            NULL,
             pollution_gas
-            INT,
+            TINYINT
+            NOT
+            NULL,
             date_measurement
-            DATETIME,
+            TIMESTAMP
+            NOT
+            NULL,
             concentration
-            DECIMAL
-        (
-            10,
-            4
-        ),
-            PRIMARY KEY
-        (
+            FLOAT
+            NOT
+            NULL,
+            PRIMARY
+            KEY
+           (
             id_station,
             pollution_gas,
             date_measurement
-        ),
+           ),
             FOREIGN KEY
-        (
-            id_station
-        ) REFERENCES station
+           (
+               id_station
+           ) REFERENCES station
+           (
+               id
+           ),
+            FOREIGN KEY
+           (
+               pollution_gas
+           ) REFERENCES pollution_gas
+           (
+               id
+           )
+            );""",
+
+        """CREATE TABLE IF NOT EXISTS global_variables
+           (
+               id
+               TINYINT
+               PRIMARY
+               KEY,
+               start_date
+               DATE
+               NOT
+               NULL,
+               end_date
+               DATE
+               NOT
+               NULL,
+               date_last_update
+               TIMESTAMP
+               DEFAULT
+               CURRENT_TIMESTAMP
+               ON
+               UPDATE
+               CURRENT_TIMESTAMP,
+               is_running
+               BOOLEAN
+               NOT
+               NULL
+               DEFAULT
+               TRUE
+           );""",
+
+        # INSERT IGNORE evitarà errors si la fila 1 ja existeix
+        "INSERT IGNORE INTO global_variables(id, start_date, end_date) VALUES (1, '2026-05-17', '2026-05-19');",
+
+        """CREATE TABLE IF NOT EXISTS status_batch_execution
         (
             id
-        ),
-            FOREIGN KEY
-        (
-            pollution_gas
-        ) REFERENCES pollution_gas
+            TINYINT
+            NOT
+            NULL
+            PRIMARY
+            KEY
+            AUTO_INCREMENT,
+            status_name
+            VARCHAR
+           (
+            10
+           )
+            );""",
+
+        # Assignem explícitament els IDs amb INSERT IGNORE per garantir que l'1 sigui sempre 'Idle'
+        """INSERT
+        IGNORE INTO status_batch_execution (id, status_name) VALUES 
+            (1, 'Idle'), (2, 'Running'), (3, 'Executing'), 
+            (4, 'Success'), (5, 'Error-lmb'), (6, 'Error');""",
+
+        """CREATE TABLE IF NOT EXISTS batch_execution_log
         (
             id
-        )
-            );
-        """
+            INT
+            AUTO_INCREMENT
+            PRIMARY
+            KEY,
+            execution_date
+            TIMESTAMP
+            DEFAULT
+            CURRENT_TIMESTAMP,
+            update_date_status
+            TIMESTAMP
+            DEFAULT
+            CURRENT_TIMESTAMP
+            ON
+            UPDATE
+            CURRENT_TIMESTAMP,
+            start_date
+            DATE
+            NOT
+            NULL,
+            end_date
+            DATE
+            NOT
+            NULL,
+            path_result_athena
+            varchar
+           (
+            255
+           ) DEFAULT NULL,
+            total_pollution_concentrations_added INT DEFAULT 0,
+            id_status TINYINT NOT NULL DEFAULT 1,
+            log_s3 VARCHAR
+           (
+               255
+           ) DEFAULT NULL,
+            FOREIGN KEY
+           (
+               id_status
+           ) REFERENCES status_batch_execution
+           (
+               id
+           )
+            );"""
     ]
 
     with connection.cursor() as cursor:
-        # 1. Crear l'esquema
-        for query in taules_sql:
-            cursor.execute(query)
-
-        # 2. Inicialitzar global_variables si està buida (necessari per a l'script ETL)
-        cursor.execute("SELECT COUNT(*) as count FROM global_variables")
-        result = cursor.fetchone()
-        if result['count'] == 0:
-            print("Inicialitzant la taula global_variables amb la data per defecte...")
-            cursor.execute("""
-                           INSERT INTO global_variables (start_date, end_date, is_running) 
-                VALUES ('2026-05-17', '2026-05-19', 1)
-            """)
+        for index, query in enumerate(sql_commands):
+            try:
+                cursor.execute(query)
+            except Exception as e:
+                print(f"Error executant la consulta {index}:\n{query}\nError: {e}")
+                sys.exit(1)
 
         connection.commit()
 
     connection.close()
-    print("Process finalitzat. La base de dades està llesta per ser utilitzada!")
+    print("Procés finalitzat! L'esquema de la base de dades s'ha aplicat correctament.")
 
 if __name__ == '__main__':
     init_database()
