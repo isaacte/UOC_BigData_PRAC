@@ -30,7 +30,6 @@ def init_database():
             host=host,
             user=user,
             password=password,
-            database=db_name,
             cursorclass=pymysql.cursors.DictCursor
         )
     except pymysql.MySQLError as e:
@@ -40,6 +39,10 @@ def init_database():
     print("Connexió establerta. Creant taules optimitzades només si no existeixen...")
 
     sql_commands = [
+        f"CREATE DATABASE IF NOT EXISTS {db_name};",
+
+        f"USE {db_name};",
+
         """CREATE TABLE IF NOT EXISTS unit
         (
             id
