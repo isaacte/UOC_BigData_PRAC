@@ -291,12 +291,6 @@ def process_single_day(process_date, params):
 
         # Verificar que no hi ha NaN residuals
         nan_count = df_final.isnull().sum().sum()
-        if nan_count > 0:
-            print(f"[{fecha_str}] Avís: {nan_count} valors NaN s'han convertit a NULL")
-            null_per_column = df_final.isnull().sum()
-            for col, count in null_per_column.items():
-                if count > 0:
-                    print(f"  - {col}: {count} NULL")
 
         connection = get_db_connection(params)
         with connection.cursor() as cursor:
