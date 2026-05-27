@@ -408,6 +408,7 @@ def execute_filters_statistics():
 
     sq = StatisticsQueries(conn, cursor, start_date, end_date, pollution_gas, stations)
 
+    has_data = sq.check_if_exists_data()
     avg_concentration_gas = sq.execute_avg_concentration_gas()
     maximum_concentration_gas = sq.maximum_concentration_gas()
     minimum_concentration_gas = sq.minimum_concentration_gas()
@@ -415,8 +416,9 @@ def execute_filters_statistics():
     pollution_station_gas_info = sq.get_data_to_compare_pollutions_per_station_type()
     map_data = sq.get_stations_latest_data()
     boxplot_data = sq.get_pollution_gas_concentration_boxplot_data()
-    
+
     info = {
+        'has_data': has_data,
         'stations': stations,
         'avg_concentration_gas': avg_concentration_gas,
         'maximum_concentration_gas': maximum_concentration_gas,
