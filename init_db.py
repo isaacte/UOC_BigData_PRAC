@@ -1,6 +1,7 @@
 import boto3
 import pymysql
 import sys
+import argparse
 
 def get_db_credentials():
     print("Recuperant credencials de Parameter Store...")
@@ -15,11 +16,12 @@ def get_db_credentials():
         print(f"Error recuperant les credencials: {e}")
         sys.exit(1)
 
-def init_database():
+def init_database(clean=False):
     host, user, password, db_name = get_db_credentials()
 
-    print(f"Connectant a la base de dades '{db_name}' a {host}...")
+    print(f"Connectant a la base de dades a {host}...")
     try:
+        # Ens connectem sense especificar la db_name per poder esborrar-la/crear-la
         connection = pymysql.connect(
             host=host,
             user=user,
@@ -30,9 +32,17 @@ def init_database():
         print(f"Error de connexió a MySQL: {e}")
         sys.exit(1)
 
-    print("Connexió establerta. Creant taules optimitzades només si no existeixen...")
+    sql_commands = []
 
-    sql_commands = [
+    # Si s'ha passat el paràmetre --clean, afegim el DROP DATABASE primer
+    if clean:
+        print(f"⚠️ ATENCIÓ: Mode --clean activat. Esborrant la base de dades '{db_name}' si existeix...")
+        sql_commands.append(f"DROP DATABASE IF EXISTS {db_name};")
+
+    print(f"Creant l'esquema de la base de dades '{db_name}' (si no existeix)...")
+
+    # Afegim la resta de comandos de creació
+    sql_commands.extend([
         f"CREATE DATABASE IF NOT EXISTS {db_name};",
 
         f"USE {db_name};",
@@ -99,7 +109,6 @@ def init_database():
             FOREIGN KEY (pollution_gas) REFERENCES pollution_gas(id)
         );""",
 
-        # Taula per controlar la última execució
         """CREATE TABLE IF NOT EXISTS etl_control (
             id TINYINT PRIMARY KEY,
             last_processed_date DATE NOT NULL,
@@ -107,7 +116,6 @@ def init_database():
             is_running BOOLEAN NOT NULL DEFAULT TRUE
         );""",
 
-        # Registre per defecte
         "INSERT IGNORE INTO etl_control(id, last_processed_date) VALUES (1, '2025-01-01');",
 
         """CREATE TABLE IF NOT EXISTS status_batch_execution (
@@ -119,7 +127,6 @@ def init_database():
             (1, 'Idle'), (2, 'Running'), (3, 'Executing'), 
             (4, 'Success'), (5, 'Error-lmb'), (6, 'Error');""",
 
-        # --- TABLA DE LOGS ADAPTADA AL DÍA A DÍA ---
         """CREATE TABLE IF NOT EXISTS batch_execution_log (
             id INT AUTO_INCREMENT PRIMARY KEY,
             execution_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -131,7 +138,7 @@ def init_database():
             log_s3 VARCHAR(255) DEFAULT NULL,
             FOREIGN KEY (id_status) REFERENCES status_batch_execution(id)
         );"""
-    ]
+    ])
 
     with connection.cursor() as cursor:
         for index, query in enumerate(sql_commands):
@@ -147,4 +154,10 @@ def init_database():
     print("Procés finalitzat! L'esquema de la base de dades s'ha aplicat correctament.")
 
 if __name__ == '__main__':
-    init_database()
+    # Configurem argparse per acceptar paràmetres per terminal
+    parser = argparse.ArgumentParser(description="Inicialitza la base de dades del projecte ETL.")
+    parser.add_argument('--clean', action='store_true', help="Esborra la base de dades existent abans de crear-la de nou.")
+    args = parser.parse_args()
+
+    # Cridem a la funció passant-li el valor del paràmetre
+    init_database(clean=args.clean)
