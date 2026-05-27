@@ -171,7 +171,12 @@ def process_single_day(process_date, params):
     query = f"""
             WITH cleaned_lines AS (
                 SELECT 
-                    regexp_replace(regexp_replace(regexp_replace(trim(linea_text), '^,', ''), '^\\[', ''), '\\]$', '') AS json_clean
+                    -- Utilitzem REPLACE en lloc de REGEXP_REPLACE per evitar problemes d'escapament de caràcters
+                    replace(
+                        replace(
+                            replace(trim(linea_text), ',', ''), 
+                        '[', ''), 
+                    ']', '') AS json_clean
                 FROM {athena_db}.air_quality_raw_text
                 WHERE linea_text IS NOT NULL
             ),
@@ -197,20 +202,28 @@ def process_single_day(process_date, params):
                     json_extract_scalar(registre, '$.contaminant') AS contaminant,
                     json_extract_scalar(registre, '$.magnitud') AS magnitud,
                     json_extract_scalar(registre, '$.data') AS data_base,
+                    -- ARRAY 1: Les hores
                     ARRAY[
-                        ROW('01:00:00', CAST(json_extract_scalar(registre, '$.h01') AS DOUBLE)), ROW('02:00:00', CAST(json_extract_scalar(registre, '$.h02') AS DOUBLE)),
-                        ROW('03:00:00', CAST(json_extract_scalar(registre, '$.h03') AS DOUBLE)), ROW('04:00:00', CAST(json_extract_scalar(registre, '$.h04') AS DOUBLE)),
-                        ROW('05:00:00', CAST(json_extract_scalar(registre, '$.h05') AS DOUBLE)), ROW('06:00:00', CAST(json_extract_scalar(registre, '$.h06') AS DOUBLE)),
-                        ROW('07:00:00', CAST(json_extract_scalar(registre, '$.h07') AS DOUBLE)), ROW('08:00:00', CAST(json_extract_scalar(registre, '$.h08') AS DOUBLE)),
-                        ROW('09:00:00', CAST(json_extract_scalar(registre, '$.h09') AS DOUBLE)), ROW('10:00:00', CAST(json_extract_scalar(registre, '$.h10') AS DOUBLE)),
-                        ROW('11:00:00', CAST(json_extract_scalar(registre, '$.h11') AS DOUBLE)), ROW('12:00:00', CAST(json_extract_scalar(registre, '$.h12') AS DOUBLE)),
-                        ROW('13:00:00', CAST(json_extract_scalar(registre, '$.h13') AS DOUBLE)), ROW('14:00:00', CAST(json_extract_scalar(registre, '$.h14') AS DOUBLE)),
-                        ROW('15:00:00', CAST(json_extract_scalar(registre, '$.h15') AS DOUBLE)), ROW('16:00:00', CAST(json_extract_scalar(registre, '$.h16') AS DOUBLE)),
-                        ROW('17:00:00', CAST(json_extract_scalar(registre, '$.h17') AS DOUBLE)), ROW('18:00:00', CAST(json_extract_scalar(registre, '$.h18') AS DOUBLE)),
-                        ROW('19:00:00', CAST(json_extract_scalar(registre, '$.h19') AS DOUBLE)), ROW('20:00:00', CAST(json_extract_scalar(registre, '$.h20') AS DOUBLE)),
-                        ROW('21:00:00', CAST(json_extract_scalar(registre, '$.h21') AS DOUBLE)), ROW('22:00:00', CAST(json_extract_scalar(registre, '$.h22') AS DOUBLE)),
-                        ROW('23:00:00', CAST(json_extract_scalar(registre, '$.h23') AS DOUBLE)), ROW('00:00:00', CAST(json_extract_scalar(registre, '$.h24') AS DOUBLE))
-                    ] AS hores_array
+                        '01:00:00', '02:00:00', '03:00:00', '04:00:00', '05:00:00', '06:00:00',
+                        '07:00:00', '08:00:00', '09:00:00', '10:00:00', '11:00:00', '12:00:00',
+                        '13:00:00', '14:00:00', '15:00:00', '16:00:00', '17:00:00', '18:00:00',
+                        '19:00:00', '20:00:00', '21:00:00', '22:00:00', '23:00:00', '00:00:00'
+                    ] AS array_hores,
+                    -- ARRAY 2: Les concentracions
+                    ARRAY[
+                        CAST(json_extract_scalar(registre, '$.h01') AS DOUBLE), CAST(json_extract_scalar(registre, '$.h02') AS DOUBLE),
+                        CAST(json_extract_scalar(registre, '$.h03') AS DOUBLE), CAST(json_extract_scalar(registre, '$.h04') AS DOUBLE),
+                        CAST(json_extract_scalar(registre, '$.h05') AS DOUBLE), CAST(json_extract_scalar(registre, '$.h06') AS DOUBLE),
+                        CAST(json_extract_scalar(registre, '$.h07') AS DOUBLE), CAST(json_extract_scalar(registre, '$.h08') AS DOUBLE),
+                        CAST(json_extract_scalar(registre, '$.h09') AS DOUBLE), CAST(json_extract_scalar(registre, '$.h10') AS DOUBLE),
+                        CAST(json_extract_scalar(registre, '$.h11') AS DOUBLE), CAST(json_extract_scalar(registre, '$.h12') AS DOUBLE),
+                        CAST(json_extract_scalar(registre, '$.h13') AS DOUBLE), CAST(json_extract_scalar(registre, '$.h14') AS DOUBLE),
+                        CAST(json_extract_scalar(registre, '$.h15') AS DOUBLE), CAST(json_extract_scalar(registre, '$.h16') AS DOUBLE),
+                        CAST(json_extract_scalar(registre, '$.h17') AS DOUBLE), CAST(json_extract_scalar(registre, '$.h18') AS DOUBLE),
+                        CAST(json_extract_scalar(registre, '$.h19') AS DOUBLE), CAST(json_extract_scalar(registre, '$.h20') AS DOUBLE),
+                        CAST(json_extract_scalar(registre, '$.h21') AS DOUBLE), CAST(json_extract_scalar(registre, '$.h22') AS DOUBLE),
+                        CAST(json_extract_scalar(registre, '$.h23') AS DOUBLE), CAST(json_extract_scalar(registre, '$.h24') AS DOUBLE)
+                    ] AS array_concentrations
                 FROM parsed_data
                 WHERE CAST(substring(json_extract_scalar(registre, '$.data'), 1, 10) AS DATE) = DATE '{fecha_str}'
             )
@@ -220,7 +233,8 @@ def process_single_day(process_date, params):
                 CAST(substring(f.data_base, 1, 11) || t.hora_id AS TIMESTAMP) AS date_measurement,
                 t.concentration
             FROM flattened_data f
-            CROSS JOIN UNNEST(f.hores_array) AS t(hora_id, concentration)
+            -- Zipejem els dos arrays, convertint-los en dues columnes perfectes:
+            CROSS JOIN UNNEST(f.array_hores, f.array_concentrations) AS t(hora_id, concentration)
             WHERE t.concentration IS NOT NULL;
         """
 
