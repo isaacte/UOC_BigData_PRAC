@@ -7,7 +7,6 @@ import pandas as pd
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-
 # Cadenat global per evitar que els fils col·lideixin en crear estacions/municipis nous
 metadata_lock = threading.Lock()
 
@@ -169,57 +168,69 @@ def process_single_day(process_date, params):
 
     athena_db = params['ATHENEA_DB']
 
+    # CONSULTA CORREGIDA per manejar els formats problemàtics de linea_text
     query = f"""
-            WITH cleaned_lines AS (
-                SELECT 
-                    regexp_replace(
-                        regexp_replace(
-                            regexp_replace(trim(linea_text), '^,', ''), 
-                            '^\\[', ''
-                        ),
-                        '\\]$', ''
-                    ) AS json_clean
-                FROM {athena_db}.air_quality_raw_text
-                WHERE linea_text IS NOT NULL
-            ),
-            parsed_data AS (
-                SELECT TRY(json_parse(json_clean)) AS registre
-                FROM cleaned_lines
-                WHERE json_clean LIKE '{{%'
-            )
+        WITH cleaned_lines AS (
             SELECT 
-                json_extract_scalar(registre, '$.codi_eoi') AS codi_eoi,
-                json_extract_scalar(registre, '$.nom_estacio') AS nom_estacio,
-                json_extract_scalar(registre, '$.data') AS data_raw, 
-                json_extract_scalar(registre, '$.magnitud') AS magnitud,
-                json_extract_scalar(registre, '$.contaminant') AS contaminant,
-                json_extract_scalar(registre, '$.unitats') AS unitats,
-                json_extract_scalar(registre, '$.tipus_estacio') AS tipus_estacio,
-                json_extract_scalar(registre, '$.area_urbana') AS area_urbana,
-                json_extract_scalar(registre, '$.codi_ine') AS codi_ine,
-                json_extract_scalar(registre, '$.municipi') AS municipi,
-                json_extract_scalar(registre, '$.codi_comarca') AS codi_comarca,
-                json_extract_scalar(registre, '$.nom_comarca') AS nom_comarca,
-                json_extract_scalar(registre, '$.altitud') AS altitud,
-                json_extract_scalar(registre, '$.latitud') AS latitud,
-                json_extract_scalar(registre, '$.longitud') AS longitud,
-                json_extract_scalar(registre, '$.h01') AS h01, json_extract_scalar(registre, '$.h02') AS h02,
-                json_extract_scalar(registre, '$.h03') AS h03, json_extract_scalar(registre, '$.h04') AS h04,
-                json_extract_scalar(registre, '$.h05') AS h05, json_extract_scalar(registre, '$.h06') AS h06,
-                json_extract_scalar(registre, '$.h07') AS h07, json_extract_scalar(registre, '$.h08') AS h08,
-                json_extract_scalar(registre, '$.h09') AS h09, json_extract_scalar(registre, '$.h10') AS h10,
-                json_extract_scalar(registre, '$.h11') AS h11, json_extract_scalar(registre, '$.h12') AS h12,
-                json_extract_scalar(registre, '$.h13') AS h13, json_extract_scalar(registre, '$.h14') AS h14,
-                json_extract_scalar(registre, '$.h15') AS h15, json_extract_scalar(registre, '$.h16') AS h16,
-                json_extract_scalar(registre, '$.h17') AS h17, json_extract_scalar(registre, '$.h18') AS h18,
-                json_extract_scalar(registre, '$.h19') AS h19, json_extract_scalar(registre, '$.h20') AS h20,
-                json_extract_scalar(registre, '$.h21') AS h21, json_extract_scalar(registre, '$.h22') AS h22,
-                json_extract_scalar(registre, '$.h23') AS h23, json_extract_scalar(registre, '$.h24') AS h24
-            FROM parsed_data
-            WHERE CAST(substring(json_extract_scalar(registre, '$.data'), 1, 10) AS DATE) = DATE '{fecha_str}'
-        """
+                linea_text,
+                CASE
+                    WHEN linea_text = '[]' THEN NULL
+                    WHEN linea_text LIKE '[%' THEN 
+                        substr(trim(linea_text), 2, length(trim(linea_text)) - 2)
+                    WHEN linea_text LIKE ',%' THEN 
+                        substr(trim(linea_text), 2)
+                    ELSE trim(linea_text)
+                END AS json_candidate
+            FROM {athena_db}.air_quality_raw_text
+            WHERE linea_text IS NOT NULL AND trim(linea_text) != '[]'
+        ),
+        validated_json AS (
+            SELECT 
+                json_candidate,
+                TRY(json_parse(json_candidate)) AS registre
+            FROM cleaned_lines
+            WHERE json_candidate IS NOT NULL
+        ),
+        parsed_data AS (
+            SELECT registre
+            FROM validated_json
+            WHERE registre IS NOT NULL
+        )
+        SELECT 
+            json_extract_scalar(registre, '$.codi_eoi') AS codi_eoi,
+            json_extract_scalar(registre, '$.nom_estacio') AS nom_estacio,
+            json_extract_scalar(registre, '$.data') AS data_raw,
+            TRY(cast(substring(json_extract_scalar(registre, '$.data'), 1, 10) as date)) as data_parsed,
+            json_extract_scalar(registre, '$.magnitud') AS magnitud,
+            json_extract_scalar(registre, '$.contaminant') AS contaminant,
+            json_extract_scalar(registre, '$.unitats') AS unitats,
+            json_extract_scalar(registre, '$.tipus_estacio') AS tipus_estacio,
+            json_extract_scalar(registre, '$.area_urbana') AS area_urbana,
+            json_extract_scalar(registre, '$.codi_ine') AS codi_ine,
+            json_extract_scalar(registre, '$.municipi') AS municipi,
+            json_extract_scalar(registre, '$.codi_comarca') AS codi_comarca,
+            json_extract_scalar(registre, '$.nom_comarca') AS nom_comarca,
+            json_extract_scalar(registre, '$.altitud') AS altitud,
+            json_extract_scalar(registre, '$.latitud') AS latitud,
+            json_extract_scalar(registre, '$.longitud') AS longitud,
+            json_extract_scalar(registre, '$.h01') AS h01, json_extract_scalar(registre, '$.h02') AS h02,
+            json_extract_scalar(registre, '$.h03') AS h03, json_extract_scalar(registre, '$.h04') AS h04,
+            json_extract_scalar(registre, '$.h05') AS h05, json_extract_scalar(registre, '$.h06') AS h06,
+            json_extract_scalar(registre, '$.h07') AS h07, json_extract_scalar(registre, '$.h08') AS h08,
+            json_extract_scalar(registre, '$.h09') AS h09, json_extract_scalar(registre, '$.h10') AS h10,
+            json_extract_scalar(registre, '$.h11') AS h11, json_extract_scalar(registre, '$.h12') AS h12,
+            json_extract_scalar(registre, '$.h13') AS h13, json_extract_scalar(registre, '$.h14') AS h14,
+            json_extract_scalar(registre, '$.h15') AS h15, json_extract_scalar(registre, '$.h16') AS h16,
+            json_extract_scalar(registre, '$.h17') AS h17, json_extract_scalar(registre, '$.h18') AS h18,
+            json_extract_scalar(registre, '$.h19') AS h19, json_extract_scalar(registre, '$.h20') AS h20,
+            json_extract_scalar(registre, '$.h21') AS h21, json_extract_scalar(registre, '$.h22') AS h22,
+            json_extract_scalar(registre, '$.h23') AS h23, json_extract_scalar(registre, '$.h24') AS h24
+        FROM parsed_data
+        WHERE data_parsed = DATE '{fecha_str}'
+    """
 
     try:
+        print(f"[{fecha_str}] Executant consulta Athena...")
         response = athena.start_query_execution(QueryString=query,
                                                 ResultConfiguration={'OutputLocation': s3_path_output})
         q_id = response['QueryExecutionId']
@@ -231,14 +242,20 @@ def process_single_day(process_date, params):
             status = status_resp['QueryExecution']['Status']['State']
 
         if status != 'SUCCEEDED':
-            raise Exception(f"Athena error: {status_resp['QueryExecution']['Status'].get('StateChangeReason')}")
+            error_msg = status_resp['QueryExecution']['Status'].get('StateChangeReason', 'Unknown error')
+            raise Exception(f"Athena error: {error_msg}")
 
         csv_uri = status_resp['QueryExecution']['ResultConfiguration']['OutputLocation']
+        print(f"[{fecha_str}] Resultats a: {csv_uri}")
+
         df = pd.read_csv(csv_uri)
 
         if df.empty:
             print(f"[{fecha_str}] Sense dades per processar.")
             return fecha_str, True
+
+        # Validació de dades
+        print(f"[{fecha_str}] Registres obtinguts: {len(df)}")
 
         df['codi_eoi'] = df['codi_eoi'].astype(str)
 
@@ -250,15 +267,33 @@ def process_single_day(process_date, params):
         df_final = df.dropna(subset=['id_station', 'id_gas'])
         total_records = len(df_final)
 
+        if total_records == 0:
+            print(f"[{fecha_str}] Cap registre válid després de la validació.")
+            return fecha_str, True
+
+        # Preparem les dades per insertar
+        # Busquem la columna de concentració (pot variar el nom)
+        concentration_col = None
+        for col in df_final.columns:
+            if col.startswith('h'):
+                concentration_col = col
+                break
+
         connection = get_db_connection(params)
         with connection.cursor() as cursor:
             insert_sql = """
-                         INSERT IGNORE INTO pollution_concentration (id_station, pollution_gas, date_measurement, concentration) 
-                         VALUES (%s, %s, %s, %s)
+                         INSERT \
+                         IGNORE INTO pollution_concentration (id_station, pollution_gas, date_measurement, concentration) 
+                         VALUES ( \
+                         %s, \
+                         %s, \
+                         %s, \
+                         %s \
+                         )
                          """
             tuples_to_insert = list(
-                df_final[['id_station', 'id_gas', 'date_measurement', 'concentration']].itertuples(index=False,
-                                                                                                   name=None))
+                df_final[['id_station', 'id_gas', 'data_parsed', concentration_col]].itertuples(index=False,
+                                                                                                name=None))
             cursor.executemany(insert_sql, tuples_to_insert)
 
             cursor.execute("""
@@ -269,11 +304,11 @@ def process_single_day(process_date, params):
             connection.commit()
 
         connection.close()
-        print(f"[{fecha_str}] ¡Èxit! {total_records} files inserides correctament.")
+        print(f"[{fecha_str}] ✓ Èxit! {total_records} files inserides correctament.")
         return fecha_str, True
 
     except Exception as e:
-        print(f"[{fecha_str}] ERROR CRÍTIC: {e}")
+        print(f"[{fecha_str}] ✗ ERROR CRÍTIC: {e}")
         try:
             conn = get_db_connection(params)
             with conn.cursor() as cursor:
@@ -289,7 +324,6 @@ def process_single_day(process_date, params):
 # --- 5. ORQUESTRADOR PRINCIPAL ---
 def main():
     params = get_ssm_parameters()
-    # Actualitzat per utilitzar el nom exacte del paràmetre
     max_workers = int(params.get('CONCURRENT_ETL_WORKERS', 5))
 
     init_shared_dictionaries(params)
