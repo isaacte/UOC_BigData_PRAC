@@ -279,21 +279,24 @@ def process_single_day(process_date, params):
                 concentration_col = col
                 break
 
-        # IMPORTANT: Reemplazar NaN per None (MySQL entén None com NULL)
-        df_final = df_final.where(pd.notnull(df_final), None)
+        # IMPORTANT: Convertir TOTS els valors numèrics primer, DESPRÉS reemplazar NaN
+        # Les columnes h01-h24 són les concentracions
+        numeric_cols = [col for col in df_final.columns if col.startswith('h') or col in ['altitud', 'magnitud']]
+        for col in numeric_cols:
+            if col in df_final.columns:
+                df_final[col] = pd.to_numeric(df_final[col], errors='coerce')
 
-        # Convertir concentració a float si és necessari
-        if concentration_col:
-            df_final[concentration_col] = pd.to_numeric(df_final[concentration_col], errors='coerce')
+        # CRITICAL: Reemplazar TOTS els NaN per None - usar fillna que és més fiable
+        df_final = df_final.fillna(value=None)
 
-        # Debugging: mostrar quants NaN hi ha
+        # Verificar que no hi ha NaN residuals
         nan_count = df_final.isnull().sum().sum()
         if nan_count > 0:
             print(f"[{fecha_str}] Avís: {nan_count} valors NaN s'han convertit a NULL")
             null_per_column = df_final.isnull().sum()
             for col, count in null_per_column.items():
                 if count > 0:
-                    print(f"  - {col}: {count} NaN")
+                    print(f"  - {col}: {count} NULL")
 
         connection = get_db_connection(params)
         with connection.cursor() as cursor:
@@ -307,10 +310,23 @@ def process_single_day(process_date, params):
                          %s \
                          )
                          """
-            tuples_to_insert = list(
-                df_final[['id_station', 'id_gas', 'data_parsed', concentration_col]].itertuples(index=False,
-                                                                                                name=None))
-            cursor.executemany(insert_sql, tuples_to_insert)
+
+            # Construir tuples con conversión explícita de tipos
+            tuples_to_insert = []
+            for _, row in df_final.iterrows():
+                try:
+                    id_station = int(row['id_station']) if pd.notnull(row['id_station']) else None
+                    id_gas = int(row['id_gas']) if pd.notnull(row['id_gas']) else None
+                    data_parsed = row['data_parsed'] if pd.notnull(row['data_parsed']) else None
+                    concentration = float(row[concentration_col]) if pd.notnull(row[concentration_col]) else None
+
+                    tuples_to_insert.append((id_station, id_gas, data_parsed, concentration))
+                except (ValueError, TypeError) as e:
+                    print(f"[{fecha_str}] Avís: Error convertint registre: {e}")
+                    continue
+
+            if tuples_to_insert:
+                cursor.executemany(insert_sql, tuples_to_insert)
 
             cursor.execute("""
                            INSERT INTO batch_execution_log (processed_date, path_result_athena,
