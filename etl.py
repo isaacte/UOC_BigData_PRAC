@@ -169,60 +169,60 @@ def process_single_day(process_date, params):
     athena_db = params['ATHENEA_DB']
 
     query = f"""
-        WITH cleaned_lines AS (
+            WITH cleaned_lines AS (
+                SELECT 
+                    regexp_replace(regexp_replace(regexp_replace(trim(linea_text), '^,', ''), '^\\[', ''), '\\]$', '') AS json_clean
+                FROM {athena_db}.air_quality_raw_text
+                WHERE linea_text IS NOT NULL
+            ),
+            parsed_data AS (
+                SELECT TRY(json_parse(json_clean)) AS registre
+                FROM cleaned_lines
+                WHERE json_clean LIKE '{{%'
+            ),
+            flattened_data AS (
+                SELECT 
+                    json_extract_scalar(registre, '$.codi_eoi') AS codi_eoi,
+                    json_extract_scalar(registre, '$.nom_estacio') AS nom_estacio,
+                    json_extract_scalar(registre, '$.tipus_estacio') AS tipus_estacio,
+                    json_extract_scalar(registre, '$.area_urbana') AS area_urbana,
+                    json_extract_scalar(registre, '$.codi_comarca') AS codi_comarca,
+                    json_extract_scalar(registre, '$.nom_comarca') AS nom_comarca,
+                    json_extract_scalar(registre, '$.codi_ine') AS codi_ine,
+                    json_extract_scalar(registre, '$.municipi') AS municipi,
+                    json_extract_scalar(registre, '$.altitud') AS altitud,
+                    json_extract_scalar(registre, '$.latitud') AS latitud,
+                    json_extract_scalar(registre, '$.longitud') AS longitud,
+                    json_extract_scalar(registre, '$.unitats') AS unitats,
+                    json_extract_scalar(registre, '$.contaminant') AS contaminant,
+                    json_extract_scalar(registre, '$.magnitud') AS magnitud,
+                    json_extract_scalar(registre, '$.data') AS data_base,
+                    ARRAY[
+                        ROW('01:00:00', CAST(json_extract_scalar(registre, '$.h01') AS DOUBLE)), ROW('02:00:00', CAST(json_extract_scalar(registre, '$.h02') AS DOUBLE)),
+                        ROW('03:00:00', CAST(json_extract_scalar(registre, '$.h03') AS DOUBLE)), ROW('04:00:00', CAST(json_extract_scalar(registre, '$.h04') AS DOUBLE)),
+                        ROW('05:00:00', CAST(json_extract_scalar(registre, '$.h05') AS DOUBLE)), ROW('06:00:00', CAST(json_extract_scalar(registre, '$.h06') AS DOUBLE)),
+                        ROW('07:00:00', CAST(json_extract_scalar(registre, '$.h07') AS DOUBLE)), ROW('08:00:00', CAST(json_extract_scalar(registre, '$.h08') AS DOUBLE)),
+                        ROW('09:00:00', CAST(json_extract_scalar(registre, '$.h09') AS DOUBLE)), ROW('10:00:00', CAST(json_extract_scalar(registre, '$.h10') AS DOUBLE)),
+                        ROW('11:00:00', CAST(json_extract_scalar(registre, '$.h11') AS DOUBLE)), ROW('12:00:00', CAST(json_extract_scalar(registre, '$.h12') AS DOUBLE)),
+                        ROW('13:00:00', CAST(json_extract_scalar(registre, '$.h13') AS DOUBLE)), ROW('14:00:00', CAST(json_extract_scalar(registre, '$.h14') AS DOUBLE)),
+                        ROW('15:00:00', CAST(json_extract_scalar(registre, '$.h15') AS DOUBLE)), ROW('16:00:00', CAST(json_extract_scalar(registre, '$.h16') AS DOUBLE)),
+                        ROW('17:00:00', CAST(json_extract_scalar(registre, '$.h17') AS DOUBLE)), ROW('18:00:00', CAST(json_extract_scalar(registre, '$.h18') AS DOUBLE)),
+                        ROW('19:00:00', CAST(json_extract_scalar(registre, '$.h19') AS DOUBLE)), ROW('20:00:00', CAST(json_extract_scalar(registre, '$.h20') AS DOUBLE)),
+                        ROW('21:00:00', CAST(json_extract_scalar(registre, '$.h21') AS DOUBLE)), ROW('22:00:00', CAST(json_extract_scalar(registre, '$.h22') AS DOUBLE)),
+                        ROW('23:00:00', CAST(json_extract_scalar(registre, '$.h23') AS DOUBLE)), ROW('00:00:00', CAST(json_extract_scalar(registre, '$.h24') AS DOUBLE))
+                    ] AS hores_array
+                FROM parsed_data
+                WHERE CAST(substring(json_extract_scalar(registre, '$.data'), 1, 10) AS DATE) = DATE '{fecha_str}'
+            )
             SELECT 
-                regexp_replace(regexp_replace(regexp_replace(trim(linea_text), '^,', ''), '^\\[', ''), '\\]$', '') AS json_clean
-            FROM {athena_db}.air_quality_raw_text
-            WHERE linea_text IS NOT NULL
-        ),
-        parsed_data AS (
-            SELECT TRY(json_parse(json_clean)) AS registre
-            FROM cleaned_lines
-            WHERE json_clean LIKE '{{%'
-        ),
-        flattened_data AS (
-            SELECT 
-                json_extract_scalar(registre, '$.codi_eoi') AS codi_eoi,
-                json_extract_scalar(registre, '$.nom_estacio') AS nom_estacio,
-                json_extract_scalar(registre, '$.tipus_estacio') AS tipus_estacio,
-                json_extract_scalar(registre, '$.area_urbana') AS area_urbana,
-                json_extract_scalar(registre, '$.codi_comarca') AS codi_comarca,
-                json_extract_scalar(registre, '$.nom_comarca') AS nom_comarca,
-                json_extract_scalar(registre, '$.codi_ine') AS codi_ine,
-                json_extract_scalar(registre, '$.municipi') AS municipi,
-                json_extract_scalar(registre, '$.altitud') AS altitud,
-                json_extract_scalar(registre, '$.latitud') AS latitud,
-                json_extract_scalar(registre, '$.longitud') AS longitud,
-                json_extract_scalar(registre, '$.unitats') AS unitats,
-                json_extract_scalar(registre, '$.contaminant') AS contaminant,
-                json_extract_scalar(registre, '$.magnitud') AS magnitud,
-                json_extract_scalar(registre, '$.data') AS data_base,
-                ARRAY[
-                    ROW('01:00:00', CAST(json_extract_scalar(registre, '$.h01') AS FLOAT)), ROW('02:00:00', CAST(json_extract_scalar(registre, '$.h02') AS FLOAT)),
-                    ROW('03:00:00', CAST(json_extract_scalar(registre, '$.h03') AS FLOAT)), ROW('04:00:00', CAST(json_extract_scalar(registre, '$.h04') AS FLOAT)),
-                    ROW('05:00:00', CAST(json_extract_scalar(registre, '$.h05') AS FLOAT)), ROW('06:00:00', CAST(json_extract_scalar(registre, '$.h06') AS FLOAT)),
-                    ROW('07:00:00', CAST(json_extract_scalar(registre, '$.h07') AS FLOAT)), ROW('08:00:00', CAST(json_extract_scalar(registre, '$.h08') AS FLOAT)),
-                    ROW('09:00:00', CAST(json_extract_scalar(registre, '$.h09') AS FLOAT)), ROW('10:00:00', CAST(json_extract_scalar(registre, '$.h10') AS FLOAT)),
-                    ROW('11:00:00', CAST(json_extract_scalar(registre, '$.h11') AS FLOAT)), ROW('12:00:00', CAST(json_extract_scalar(registre, '$.h12') AS FLOAT)),
-                    ROW('13:00:00', CAST(json_extract_scalar(registre, '$.h13') AS FLOAT)), ROW('14:00:00', CAST(json_extract_scalar(registre, '$.h14') AS FLOAT)),
-                    ROW('15:00:00', CAST(json_extract_scalar(registre, '$.h15') AS FLOAT)), ROW('16:00:00', CAST(json_extract_scalar(registre, '$.h16') AS FLOAT)),
-                    ROW('17:00:00', CAST(json_extract_scalar(registre, '$.h17') AS FLOAT)), ROW('18:00:00', CAST(json_extract_scalar(registre, '$.h18') AS FLOAT)),
-                    ROW('19:00:00', CAST(json_extract_scalar(registre, '$.h19') AS FLOAT)), ROW('20:00:00', CAST(json_extract_scalar(registre, '$.h20') AS FLOAT)),
-                    ROW('21:00:00', CAST(json_extract_scalar(registre, '$.h21') AS FLOAT)), ROW('22:00:00', CAST(json_extract_scalar(registre, '$.h22') AS FLOAT)),
-                    ROW('23:00:00', CAST(json_extract_scalar(registre, '$.h23') AS FLOAT)), ROW('00:00:00', CAST(json_extract_scalar(registre, '$.h24') AS FLOAT))
-                ] AS hores_array
-            FROM parsed_data
-            WHERE CAST(substring(json_extract_scalar(registre, '$.data'), 1, 10) AS DATE) = DATE '{fecha_str}'
-        )
-        SELECT 
-            f.codi_eoi, f.nom_estacio, f.tipus_estacio, f.area_urbana, f.codi_comarca, f.nom_comarca,
-            f.codi_ine, f.municipi, f.altitud, f.latitud, f.longitud, f.unitats, f.contaminant, f.magnitud,
-            CAST(substring(f.data_base, 1, 11) || t.hora_id AS TIMESTAMP) AS date_measurement,
-            t.concentration
-        FROM flattened_data f
-        CROSS JOIN UNNEST(f.hores_array) AS t(hora_id, concentration)
-        WHERE t.concentration IS NOT NULL;
-    """
+                f.codi_eoi, f.nom_estacio, f.tipus_estacio, f.area_urbana, f.codi_comarca, f.nom_comarca,
+                f.codi_ine, f.municipi, f.altitud, f.latitud, f.longitud, f.unitats, f.contaminant, f.magnitud,
+                CAST(substring(f.data_base, 1, 11) || t.hora_id AS TIMESTAMP) AS date_measurement,
+                t.concentration
+            FROM flattened_data f
+            CROSS JOIN UNNEST(f.hores_array) AS t(hora_id, concentration)
+            WHERE t.concentration IS NOT NULL;
+        """
 
     try:
         response = athena.start_query_execution(QueryString=query,
