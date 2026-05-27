@@ -31,6 +31,7 @@ def get_ssm_parameters():
             '/bdata-processing-server/env/DB_USER',
             '/bdata-processing-server/env/DB_PASS',
             '/bdata-processing-server/env/DB_NAME',
+            '/bdata-processing-server/env/ATHENEA_DB',
             '/bdata-processing-server/env/BUCKET_ORIGIN',
             '/bdata-processing-server/env/BUCKET_PROCESSED',
             '/bdata-processing-server/env/CONCURRENT_ETL_WORKERS'
@@ -165,11 +166,13 @@ def process_single_day(process_date, params):
     athena = boto3.client('athena', region_name='us-east-1')
     s3_path_output = f"s3://{params['BUCKET_PROCESSED']}/athena-results/"
 
+    athena_db = params['ATHENEA_DB']
+
     query = f"""
         WITH cleaned_lines AS (
             SELECT 
                 regexp_replace(regexp_replace(regexp_replace(trim(linea_text), '^,', ''), '^\\[', ''), '\\]$', '') AS json_clean
-            FROM la_teva_base_de_dades_glue.air_quality_raw_text
+            FROM {athena_db}.air_quality_raw_text
             WHERE linea_text IS NOT NULL
         ),
         parsed_data AS (
@@ -255,14 +258,8 @@ def process_single_day(process_date, params):
         connection = get_db_connection(params)
         with connection.cursor() as cursor:
             insert_sql = """
-                         INSERT \
-                         IGNORE INTO pollution_concentration (id_station, pollution_gas, date_measurement, concentration) 
-                VALUES ( \
-                         %s, \
-                         %s, \
-                         %s, \
-                         %s \
-                         ) \
+                         INSERT IGNORE INTO pollution_concentration (id_station, pollution_gas, date_measurement, concentration) 
+                         VALUES (%s, %s, %s, %s)
                          """
             tuples_to_insert = list(
                 df_final[['id_station', 'id_gas', 'date_measurement', 'concentration']].itertuples(index=False,
