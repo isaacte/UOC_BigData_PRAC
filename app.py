@@ -1,4 +1,5 @@
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request, Response
+from statistics_queries import StatisticsQueries
 import boto3
 import pymysql
 import json
@@ -365,6 +366,76 @@ def download_log(execution_id):
 
     except Exception as e:
         return jsonify({'error': f'Error descargant: {str(e)}'}), 500
+
+
+@app.route('/statistics')
+def statistics():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, name_station
+        FROM station;
+        """)
+    
+    stations = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT g.id as id, g.name_gas as name_gas, u.name_units as units FROM pollution_gas g INNER JOIN unit u ON g.id_unit = u.id
+                   """)
+    
+    pollution_gas = cursor.fetchall()
+    conn.close()
+    cursor.close()
+    return render_template(
+        'statistics.html',
+        stations = stations,
+        pollution_gas = pollution_gas
+    )
+
+
+@app.route("/statistics/filter-results", methods=['POST'])
+def execute_filters_statistics():
+    data_to_filter = json.loads(request.form.get('data_to_filter'))
+
+    start_date = data_to_filter["startDate"]
+    end_date = data_to_filter["endDate"]
+    pollution_gas = data_to_filter["pollutionGas"]
+    stations = data_to_filter["stations"]
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    sq = StatisticsQueries(conn, cursor, start_date, end_date, pollution_gas, stations)
+
+    avg_concentration_gas = sq.execute_avg_concentration_gas()
+    maximum_concentration_gas = sq.maximum_concentration_gas()
+    minimum_concentration_gas = sq.minimum_concentration_gas()
+    pollution_gas_info_per_day = sq.get_time_series_concentration_gas()
+    pollution_station_gas_info = sq.get_data_to_compare_pollutions_per_station_type()
+    map_data = sq.get_stations_latest_data()
+    boxplot_data = sq.get_pollution_gas_concentration_boxplot_data()
+    
+    info = {
+        'stations': stations,
+        'avg_concentration_gas': avg_concentration_gas,
+        'maximum_concentration_gas': maximum_concentration_gas,
+        'minimum_concentration_gas': minimum_concentration_gas,
+        'pollution_gas_info_per_day': json.dumps(pollution_gas_info_per_day),
+        'pollution_station_gas_info': json.dumps(pollution_station_gas_info),
+        'map_data': json.dumps(map_data),
+        'boxplot_data': json.dumps(boxplot_data)
+    }
+
+    html_content = render_template('statistics_data_graphs.html', info=info)
+
+    conn.close()
+    cursor.close()
+
+    return Response(
+        html_content,
+        mimetype='text/html'
+    )
 
 
 @app.errorhandler(404)
