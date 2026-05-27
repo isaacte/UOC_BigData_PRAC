@@ -279,6 +279,22 @@ def process_single_day(process_date, params):
                 concentration_col = col
                 break
 
+        # IMPORTANT: Reemplazar NaN per None (MySQL entén None com NULL)
+        df_final = df_final.where(pd.notnull(df_final), None)
+
+        # Convertir concentració a float si és necessari
+        if concentration_col:
+            df_final[concentration_col] = pd.to_numeric(df_final[concentration_col], errors='coerce')
+
+        # Debugging: mostrar quants NaN hi ha
+        nan_count = df_final.isnull().sum().sum()
+        if nan_count > 0:
+            print(f"[{fecha_str}] Avís: {nan_count} valors NaN s'han convertit a NULL")
+            null_per_column = df_final.isnull().sum()
+            for col, count in null_per_column.items():
+                if count > 0:
+                    print(f"  - {col}: {count} NaN")
+
         connection = get_db_connection(params)
         with connection.cursor() as cursor:
             insert_sql = """
