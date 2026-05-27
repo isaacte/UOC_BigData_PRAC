@@ -7,6 +7,9 @@ import pandas as pd
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# Ignorar deprecated
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+
 # Cadenat global per evitar que els fils col·lideixin en crear estacions/municipis nous
 metadata_lock = threading.Lock()
 

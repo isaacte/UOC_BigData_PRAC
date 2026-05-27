@@ -2,6 +2,10 @@ import boto3
 import pymysql
 import sys
 import argparse
+import warnings
+
+# Ignorar deprecated
+warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 def get_db_credentials():
     print("Recuperant credencials de Parameter Store...")
