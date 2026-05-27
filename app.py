@@ -5,11 +5,11 @@ import json
 
 app = Flask(__name__, template_folder='templates')
 
-# ========== LECTURA DE PARÁMETROS SSM ==========
+# ========== LECTURA DE PARÀMETRES SSM ==========
 ssm = boto3.client('ssm', region_name='us-east-1')
 s3 = boto3.client('s3', region_name='us-east-1')
 
-print("📝 Recuperando parámetros de SSM Parameter Store...")
+print("📝 Recuperant paràmetres de SSM Parameter Store...")
 
 try:
     # DB HOST
@@ -36,14 +36,14 @@ try:
     response_region = ssm.get_parameter(Name='/bdata-processing-server/env/AWS_REGION', WithDecryption=False)
     AWS_REGION = response_region['Parameter']['Value']
 
-    print("✅ Parámetros cargados correctamente")
+    print("✅ Paràmetres carregats correctament")
     print(f"   Host: {DB_HOST}")
     print(f"   BD: {DB_NAME}")
     print(f"   Bucket Logs: {BUCKET_LOGS}")
-    print(f"   Región: {AWS_REGION}")
+    print(f"   Regió: {AWS_REGION}")
 
 except Exception as e:
-    print(f"❌ Error recuperando parámetros SSM: {e}")
+    print(f"❌ Error recuperant paràmetres SSM: {e}")
     DB_HOST = None
     DB_USER = None
     DB_PASS = None
@@ -53,10 +53,10 @@ except Exception as e:
     raise
 
 
-# ========== FUNCIONES DE CONEXIÓN ==========
+# ========== FUNCIONS DE CONNEXIÓ ==========
 
 def get_db_connection():
-    """Obtener conexión a la base de datos"""
+    """Obtenir connexió a la base de dades"""
     return pymysql.connect(
         host=DB_HOST,
         user=DB_USER,
@@ -66,23 +66,23 @@ def get_db_connection():
     )
 
 
-# ========== RUTAS ==========
+# ========== RUTES ==========
 
 @app.route('/')
 def dashboard():
-    """Página principal del dashboard"""
+    """Pàgina principal del panell de control"""
     return render_template('dashboard.html')
 
 
 @app.route('/api/health')
 def health():
-    """Verificar conexión a BD"""
+    """Verificar connexió a BD"""
     try:
         conn = get_db_connection()
         conn.close()
         return jsonify({
             'status': 'ok',
-            'message': 'Conectado a RDS',
+            'message': 'Connectat a RDS',
             'database': DB_NAME,
             'host': DB_HOST
         })
@@ -95,34 +95,34 @@ def health():
 
 @app.route('/api/system-stats')
 def system_stats():
-    """Estadísticas generales del sistema"""
+    """Estadístiques generals del sistema"""
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
-            # Total de ejecuciones
+            # Total d'execucions
             cursor.execute("SELECT COUNT(*) as total FROM etl_execution_summary")
             total = cursor.fetchone()['total']
 
-            # Ejecuciones exitosas
+            # Execucions exitoses
             cursor.execute("SELECT COUNT(*) as success FROM etl_execution_summary WHERE status='success'")
             success = cursor.fetchone()['success']
 
-            # Ejecuciones fallidas
+            # Execucions fallides
             cursor.execute("SELECT COUNT(*) as failed FROM etl_execution_summary WHERE status='failed'")
             failed = cursor.fetchone()['failed']
 
-            # Total de registros procesados
+            # Total de registres processats
             cursor.execute("SELECT SUM(total_records) as records FROM etl_execution_summary WHERE status='success'")
             result = cursor.fetchone()
             records = result['records'] if result['records'] else 0
 
-            # Duración promedio
+            # Duració mitjana
             cursor.execute(
                 "SELECT AVG(duration_seconds) as avg_duration FROM etl_execution_summary WHERE status='success'")
             result = cursor.fetchone()
             avg_duration = result['avg_duration'] if result['avg_duration'] else 0
 
-            # Última ejecución
+            # Última execució
             cursor.execute("SELECT MAX(started_at) as last_run FROM etl_execution_summary")
             result = cursor.fetchone()
             last_run = result['last_run']
@@ -146,7 +146,7 @@ def system_stats():
 
 @app.route('/api/recent-executions')
 def recent_executions():
-    """Últimas ejecuciones (últimos 7 días)"""
+    """Últimes execucions (últims 7 dies)"""
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
@@ -167,7 +167,7 @@ def recent_executions():
 
         conn.close()
 
-        # Formatear resultados
+        # Formatar resultats
         result = []
         for ex in executions:
             result.append({
@@ -188,7 +188,7 @@ def recent_executions():
 
 @app.route('/api/executions-by-date/<date>')
 def executions_by_date(date):
-    """Ejecuciones de un día específico"""
+    """Execucions d'un dia específic"""
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
@@ -229,7 +229,7 @@ def executions_by_date(date):
 
 @app.route('/api/execution/<execution_id>')
 def execution_details(execution_id):
-    """Detalles de una ejecución específica"""
+    """Detalls d'una execució específica"""
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
@@ -252,7 +252,7 @@ def execution_details(execution_id):
         conn.close()
 
         if not execution:
-            return jsonify({'error': 'No encontrado'}), 404
+            return jsonify({'error': 'No trobat'}), 404
 
         result = {
             'execution_id': execution['execution_id'],
@@ -267,10 +267,10 @@ def execution_details(execution_id):
             's3_log_path': execution['s3_log_path']
         }
 
-        # Si hay log en S3, intentar traerlo
+        # Si hi ha log en S3, intentar traure-lo
         if execution['s3_log_path']:
             try:
-                # Extraer bucket y key
+                # Extreure bucket i key
                 parts = execution['s3_log_path'].replace('s3://', '').split('/', 1)
                 bucket = parts[0]
                 key = parts[1]
@@ -279,7 +279,7 @@ def execution_details(execution_id):
                 log_content = json.loads(obj['Body'].read().decode('utf-8'))
                 result['s3_log'] = log_content
             except Exception as e:
-                result['s3_log_error'] = f"No se pudo leer log de S3: {str(e)}"
+                result['s3_log_error'] = f"No s'ha pogut llegir el log de S3: {str(e)}"
 
         return jsonify(result)
     except Exception as e:
@@ -288,7 +288,7 @@ def execution_details(execution_id):
 
 @app.route('/api/statistics')
 def statistics():
-    """Estadísticas por fecha"""
+    """Estadístiques per data"""
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
@@ -323,20 +323,64 @@ def statistics():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/download-log/<execution_id>')
+def download_log(execution_id):
+    """Descarregar log de S3"""
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                           SELECT s3_log_path
+                           FROM etl_execution_summary
+                           WHERE execution_id = %s
+                           """, (execution_id,))
+            execution = cursor.fetchone()
+
+        conn.close()
+
+        if not execution or not execution['s3_log_path']:
+            return jsonify({'error': 'No hi ha log disponible'}), 404
+
+        s3_log_path = execution['s3_log_path']
+
+        # Extreure bucket i key
+        parts = s3_log_path.replace('s3://', '').split('/', 1)
+        bucket = parts[0]
+        key = parts[1]
+
+        # Descarregar de S3
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        log_content = obj['Body'].read()
+
+        # Retornar com a descàrrega
+        from flask import send_file
+        from io import BytesIO
+
+        return send_file(
+            BytesIO(log_content),
+            mimetype='application/json',
+            as_attachment=True,
+            download_name=f"log-{execution_id}.json"
+        )
+
+    except Exception as e:
+        return jsonify({'error': f'Error descargant: {str(e)}'}), 500
+
+
 @app.errorhandler(404)
 def not_found(error):
-    return jsonify({'error': 'No encontrado'}), 404
+    return jsonify({'error': 'No trobat'}), 404
 
 
 @app.errorhandler(500)
 def server_error(error):
-    return jsonify({'error': 'Error interno del servidor'}), 500
+    return jsonify({'error': 'Error intern del servidor'}), 500
 
 
 # ========== MAIN ==========
 
 if __name__ == '__main__':
-    print("\n🚀 Iniciando servidor Flask en puerto 8080...")
-    print(f"   URL: http://localhost:8080")
-    print(f"   Dashboard: http://localhost:8080/\n")
-    app.run(host='0.0.0.0', port=8080, debug=False)
+    print("\nIniciant servidor Flask al port 80...")
+    print(f"   URL: http://localhost:80")
+    print(f"   Panell de control: http://localhost:80/\n")
+    app.run(host='0.0.0.0', port=80, debug=False)

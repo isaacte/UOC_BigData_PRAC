@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="ca">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ETL Dashboard - Air Quality</title>
+    <title>Panell de Control ETL - Qualitat de l'Aire</title>
 
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
@@ -191,82 +191,82 @@
     </style>
 </head>
 <body>
-    <!-- Navbar -->
+    <!-- Barra de navegació -->
     <nav class="navbar navbar-dark">
         <div class="container-fluid">
             <span class="navbar-brand">
-                <i class="bi bi-graph-up"></i> ETL Dashboard - Air Quality
+                <i class="bi bi-graph-up"></i> Panell de Control ETL - Qualitat de l'Aire
             </span>
             <span class="refresh-badge" id="refreshStatus">
-                <i class="bi bi-arrow-clockwise"></i> Auto-refresh
+                <i class="bi bi-arrow-clockwise"></i> Actualització automàtica
             </span>
         </div>
     </nav>
 
-    <!-- Main Container -->
+    <!-- Contenidor principal -->
     <div class="container-fluid mt-4">
 
-        <!-- Stats Row -->
+        <!-- Fila d'estadístiques -->
         <div class="row mb-4" id="statsContainer">
             <div class="col-md-2">
                 <div class="stat-card">
-                    <h5>Total Ejecuciones</h5>
+                    <h5>Total Execucions</h5>
                     <div class="stat-value" id="totalExecutions">-</div>
                 </div>
             </div>
             <div class="col-md-2">
                 <div class="stat-card">
-                    <h5>Exitosas</h5>
+                    <h5>Exitoses</h5>
                     <div class="stat-value" id="successCount" style="color: var(--success)">-</div>
                 </div>
             </div>
             <div class="col-md-2">
                 <div class="stat-card">
-                    <h5>Fallidas</h5>
+                    <h5>Fallides</h5>
                     <div class="stat-value" id="failedCount" style="color: var(--danger)">-</div>
                 </div>
             </div>
             <div class="col-md-2">
                 <div class="stat-card">
-                    <h5>Tasa Éxito</h5>
+                    <h5>Taxa d'Èxit</h5>
                     <div class="stat-value" id="successRate" style="color: var(--info)">-</div>
                 </div>
             </div>
             <div class="col-md-2">
                 <div class="stat-card">
-                    <h5>Duración Promedio</h5>
+                    <h5>Duració Mitjana</h5>
                     <div class="stat-value" id="avgDuration" style="font-size: 1.5rem;">-</div>
                 </div>
             </div>
             <div class="col-md-2">
                 <div class="stat-card">
-                    <h5>Último Registro</h5>
+                    <h5>Últim Registre</h5>
                     <div id="lastRun" style="font-size: 0.9rem; color: #666;">-</div>
                 </div>
             </div>
         </div>
 
-        <!-- Recent Executions Table -->
+        <!-- Taula d'execucions recents -->
         <div class="row">
             <div class="col-12">
-                <h3 class="section-title">Últimas Ejecuciones (7 días)</h3>
+                <h3 class="section-title">Últimes Execucions (7 dies)</h3>
                 <div class="table-container">
                     <table class="table table-hover mb-0" id="executionsTable">
                         <thead>
                             <tr>
-                                <th>ID Ejecución</th>
-                                <th>Fecha Proceso</th>
-                                <th>Estado</th>
-                                <th>Inicio</th>
-                                <th>Duración</th>
-                                <th>Registros</th>
-                                <th>Acciones</th>
+                                <th>ID Execució</th>
+                                <th>Data Procés</th>
+                                <th>Estat</th>
+                                <th>Inici</th>
+                                <th>Duració</th>
+                                <th>Registres</th>
+                                <th>Accions</th>
                             </tr>
                         </thead>
                         <tbody id="executionsBody">
                             <tr>
                                 <td colspan="7" class="text-center text-muted">
-                                    <div class="loading"></div> Cargando...
+                                    <div class="loading"></div> Carregant...
                                 </td>
                             </tr>
                         </tbody>
@@ -276,16 +276,16 @@
         </div>
     </div>
 
-    <!-- Execution Details Modal -->
+    <!-- Modal de detalls d'execució -->
     <div class="modal fade" id="detailsModal" tabindex="-1">
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="modalTitle">Detalles de Ejecución</h5>
+                    <h5 class="modal-title" id="modalTitle">Detalls de l'Execució</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" id="modalBody">
-                    <div class="loading"></div> Cargando detalles...
+                    <div class="loading"></div> Carregant detalls...
                 </div>
             </div>
         </div>
@@ -297,11 +297,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 
     <script>
-        const REFRESH_INTERVAL = 30000; // 30 segundos
+        const REFRESH_INTERVAL = 30000; // 30 segons
 
         function formatDate(dateString) {
             if (!dateString) return '-';
-            return new Date(dateString).toLocaleString('es-ES');
+            return new Date(dateString).toLocaleString('ca-ES');
         }
 
         function formatDuration(seconds) {
@@ -311,9 +311,9 @@
 
         function getStatusBadge(status) {
             const badges = {
-                'success': '<span class="badge badge-success"><i class="bi bi-check-circle"></i> Éxito</span>',
+                'success': '<span class="badge badge-success"><i class="bi bi-check-circle"></i> Èxit</span>',
                 'failed': '<span class="badge badge-danger"><i class="bi bi-x-circle"></i> Error</span>',
-                'running': '<span class="badge badge-warning"><i class="bi bi-hourglass-split"></i> En curso</span>'
+                'running': '<span class="badge badge-warning"><i class="bi bi-hourglass-split"></i> En curs</span>'
             };
             return badges[status] || status;
         }
@@ -327,7 +327,7 @@
                 $('#avgDuration').text(formatDuration(data.avg_duration));
                 $('#lastRun').text(data.last_run ? formatDate(data.last_run) : '-');
             }).fail(function() {
-                console.error('Error cargando estadísticas');
+                console.error('Error carregant estadístiques');
             });
         }
 
@@ -335,7 +335,7 @@
             $.get('/api/recent-executions', function(data) {
                 let html = '';
                 if (data.length === 0) {
-                    html = '<tr><td colspan="7" class="text-center text-muted">No hay ejecuciones</td></tr>';
+                    html = '<tr><td colspan="7" class="text-center text-muted">No hi ha execucions</td></tr>';
                 } else {
                     data.forEach(exec => {
                         html += `
@@ -348,7 +348,7 @@
                                 <td><strong>${exec.total_records}</strong></td>
                                 <td>
                                     <button class="btn btn-sm btn-outline-primary" onclick="showDetails('${exec.execution_id}'); event.stopPropagation();">
-                                        <i class="bi bi-eye"></i> Ver
+                                        <i class="bi bi-eye"></i> Veure
                                     </button>
                                 </td>
                             </tr>
@@ -357,50 +357,50 @@
                 }
                 $('#executionsBody').html(html);
             }).fail(function() {
-                console.error('Error cargando ejecuciones');
+                console.error('Error carregant execucions');
             });
         }
 
         function showDetails(executionId) {
             const modal = new bootstrap.Modal(document.getElementById('detailsModal'));
-            $('#modalBody').html('<div class="loading"></div> Cargando detalles...');
+            $('#modalBody').html('<div class="loading"></div> Carregant detalls...');
             modal.show();
 
             $.get(`/api/execution/${executionId}`, function(data) {
                 let html = `
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <strong>ID Ejecución:</strong><br>
+                            <strong>ID Execució:</strong><br>
                             <code>${data.execution_id}</code>
                         </div>
                         <div class="col-md-6">
-                            <strong>Estado:</strong><br>
+                            <strong>Estat:</strong><br>
                             ${getStatusBadge(data.status)}
                         </div>
                     </div>
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <strong>Fecha Proceso:</strong><br>
+                            <strong>Data Procés:</strong><br>
                             ${data.process_date || '-'}
                         </div>
                         <div class="col-md-6">
-                            <strong>Duración:</strong><br>
+                            <strong>Duració:</strong><br>
                             ${formatDuration(data.duration_seconds)}
                         </div>
                     </div>
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <strong>Inicio:</strong><br>
+                            <strong>Inici:</strong><br>
                             ${formatDate(data.started_at)}
                         </div>
                         <div class="col-md-6">
-                            <strong>Finalización:</strong><br>
+                            <strong>Finalització:</strong><br>
                             ${formatDate(data.completed_at)}
                         </div>
                     </div>
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <strong>Registros Procesados:</strong><br>
+                            <strong>Registres Processats:</strong><br>
                             <span class="badge bg-info">${data.total_records}</span>
                         </div>
                         <div class="col-md-6">
@@ -410,11 +410,23 @@
                     </div>
                 `;
 
+                if (data.s3_log_path) {
+                    html += `
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <button class="btn btn-success btn-sm" onclick="downloadLog('${data.execution_id}')">
+                                    <i class="bi bi-download"></i> Descarregar Log
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+
                 if (data.error_message) {
                     html += `
                         <div class="alert alert-danger mt-3">
                             <strong>Error:</strong> ${data.error_message}<br>
-                            <small>Tipo: ${data.error_type}</small>
+                            <small>Tipus: ${data.error_type}</small>
                         </div>
                     `;
                 }
@@ -422,7 +434,7 @@
                 if (data.s3_log && data.s3_log.events) {
                     html += `
                         <div class="mt-3">
-                            <h6>Eventos (${data.s3_log.total_events})</h6>
+                            <h6>Esdeveniments (${data.s3_log.total_events})</h6>
                             <div style="max-height: 400px; overflow-y: auto;">
                     `;
                     data.s3_log.events.forEach(event => {
@@ -441,18 +453,22 @@
                 }
 
                 $('#modalBody').html(html);
-                $('#modalTitle').text(`Detalles - ${executionId.substring(0, 8)}`);
+                $('#modalTitle').text(`Detalls - ${executionId.substring(0, 8)}`);
             }).fail(function() {
-                $('#modalBody').html('<div class="alert alert-danger">Error cargando detalles</div>');
+                $('#modalBody').html('<div class="alert alert-danger">Error carregant detalls</div>');
             });
         }
 
-        // Cargar datos al iniciar
+        function downloadLog(executionId) {
+            window.location.href = `/api/download-log/${executionId}`;
+        }
+
+        // Cargar dades al iniciar
         $(document).ready(function() {
             loadStats();
             loadExecutions();
 
-            // Auto-refresh
+            // Actualització automàtica
             setInterval(function() {
                 loadStats();
                 loadExecutions();
