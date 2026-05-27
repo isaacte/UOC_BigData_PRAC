@@ -116,7 +116,7 @@ def init_database(clean=False):
             is_running BOOLEAN NOT NULL DEFAULT TRUE
         );""",
 
-        "INSERT IGNORE INTO etl_control(id, last_processed_date) VALUES (1, '2025-01-01');",
+        "INSERT IGNORE INTO etl_control(id, last_processed_date) VALUES (1, '2025-12-31');",
 
         """CREATE TABLE IF NOT EXISTS status_batch_execution (
             id TINYINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
