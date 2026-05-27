@@ -31,8 +31,9 @@ def get_ssm_parameters():
             '/bdata-processing-server/env/DB_USER',
             '/bdata-processing-server/env/DB_PASS',
             '/bdata-processing-server/env/DB_NAME',
+            '/bdata-processing-server/env/BUCKET_ORIGIN',
             '/bdata-processing-server/env/BUCKET_PROCESSED',
-            '/bdata-processing-server/env/WORKERS'
+            '/bdata-processing-server/env/CONCURRENT_ETL_WORKERS'
         ]
         response = ssm.get_parameters(Names=names, WithDecryption=True)
         for param in response['Parameters']:
@@ -86,23 +87,19 @@ def init_shared_dictionaries(params):
 def sync_missing_metadata(df, params):
     global available_units, available_gas, available_station_types, available_urban_areas, available_comarques, available_municipalities, available_stations
 
-    # Adquirim el cadenat: si un altre fil està aquí, els altres s'esperen en cua
     with metadata_lock:
         conn = get_db_connection(params)
         cursor = conn.cursor()
 
-        # Eliminem duplicats del subset per comprovar ràpidament
         df_meta = df.drop_duplicates(subset=['codi_eoi', 'contaminant']).copy()
 
         for _, row in df_meta.iterrows():
-            # 1. Unitats
             u_name = row.get('unitats')
             if u_name and u_name not in available_units:
                 cursor.execute("INSERT INTO unit (name_units) VALUES (%s)", (u_name,))
                 conn.commit()
                 available_units[u_name] = cursor.lastrowid
 
-            # 2. Gasos (Contaminants)
             g_name = row.get('contaminant')
             if g_name and g_name not in available_gas:
                 mag = int(row['magnitud']) if pd.notnull(row['magnitud']) else 0
@@ -111,21 +108,18 @@ def sync_missing_metadata(df, params):
                 conn.commit()
                 available_gas[g_name] = cursor.lastrowid
 
-            # 3. Tipus Estació
             t_name = row.get('tipus_estacio')
             if t_name and t_name not in available_station_types:
                 cursor.execute("INSERT INTO station_type (name_type) VALUES (%s)", (t_name,))
                 conn.commit()
                 available_station_types[t_name] = cursor.lastrowid
 
-            # 4. Àrees Urbanes
             a_name = row.get('area_urbana')
             if a_name and a_name not in available_urban_areas:
                 cursor.execute("INSERT INTO urban_area (name_area) VALUES (%s)", (a_name,))
                 conn.commit()
                 available_urban_areas[a_name] = cursor.lastrowid
 
-            # 5. Comarques
             c_code = int(row['codi_comarca']) if pd.notnull(row['codi_comarca']) else None
             c_name = row.get('nom_comarca')
             if c_code and c_code not in available_comarques:
@@ -133,7 +127,6 @@ def sync_missing_metadata(df, params):
                 conn.commit()
                 available_comarques[c_code] = cursor.lastrowid
 
-            # 6. Municipis
             m_ine = row.get('codi_ine')
             m_name = row.get('municipi')
             if m_ine and m_ine not in available_municipalities:
@@ -143,7 +136,6 @@ def sync_missing_metadata(df, params):
                 conn.commit()
                 available_municipalities[m_ine] = cursor.lastrowid
 
-            # 7. Estacions
             e_code = str(row.get('codi_eoi'))
             if e_code and e_code not in available_stations:
                 alt = int(row['altitud']) if pd.notnull(row['altitud']) else 0
@@ -173,7 +165,6 @@ def process_single_day(process_date, params):
     athena = boto3.client('athena', region_name='us-east-1')
     s3_path_output = f"s3://{params['BUCKET_PROCESSED']}/athena-results/"
 
-    # Query dinàmica conservant metadades per al descobriment automàtic
     query = f"""
         WITH cleaned_lines AS (
             SELECT 
@@ -231,12 +222,10 @@ def process_single_day(process_date, params):
     """
 
     try:
-        # Execution a Athena
         response = athena.start_query_execution(QueryString=query,
                                                 ResultConfiguration={'OutputLocation': s3_path_output})
         q_id = response['QueryExecutionId']
 
-        # Polling de l'estat
         status = 'RUNNING'
         while status in ['RUNNING', 'QUEUED']:
             time.sleep(3)
@@ -253,21 +242,16 @@ def process_single_day(process_date, params):
             print(f"[{fecha_str}] Sense dades per processar.")
             return fecha_str, True
 
-        # Forcem el tipus text al codi d'estació per evitar pèrdua de zeros a l'esquerra
         df['codi_eoi'] = df['codi_eoi'].astype(str)
 
-        # CRIDEM AL SINCRONITZADOR: Si hi ha coses noves al dataframe, les crea de manera segura
         sync_missing_metadata(df, params)
 
-        # Mapegem ràpidament els IDs de memòria al nostre DataFrame definitiu
         df['id_station'] = df['codi_eoi'].map(available_stations)
         df['id_gas'] = df['contaminant'].map(available_gas)
 
-        # Netegem files que hagin pogut quedar òrfenes per errors estranys
         df_final = df.dropna(subset=['id_station', 'id_gas'])
         total_records = len(df_final)
 
-        # Inserció massiva de concentracions a RDS
         connection = get_db_connection(params)
         with connection.cursor() as cursor:
             insert_sql = """
@@ -280,13 +264,11 @@ def process_single_day(process_date, params):
                          %s \
                          ) \
                          """
-            # Extraiem les columnes en l'ordre de la taula final
             tuples_to_insert = list(
                 df_final[['id_station', 'id_gas', 'date_measurement', 'concentration']].itertuples(index=False,
                                                                                                    name=None))
             cursor.executemany(insert_sql, tuples_to_insert)
 
-            # Guardem el Log d'èxit diari
             cursor.execute("""
                            INSERT INTO batch_execution_log (processed_date, path_result_athena,
                                                             total_pollution_concentrations_added, id_status)
@@ -315,19 +297,17 @@ def process_single_day(process_date, params):
 # --- 5. ORQUESTRADOR PRINCIPAL ---
 def main():
     params = get_ssm_parameters()
-    max_workers = int(params.get('WORKERS', 5))
+    # Actualitzat per utilitzar el nom exacte del paràmetre
+    max_workers = int(params.get('CONCURRENT_ETL_WORKERS', 5))
 
-    # 1. Carregar diccionaris inicials de control
     init_shared_dictionaries(params)
 
-    # 2. Llegir última data processada
     conn = get_db_connection(params)
     with conn.cursor() as cursor:
         cursor.execute("SELECT last_processed_date FROM etl_control WHERE id = 1")
         last_processed_date = cursor.fetchone()['last_processed_date']
     conn.close()
 
-    # Calculem el rang de dies fins ahir
     fecha_objetivo = datetime.now().date() - timedelta(days=1)
     if last_processed_date >= fecha_objetivo:
         print(f"El sistema de dades ja està al dia (Última data: {last_processed_date}).")
@@ -339,10 +319,9 @@ def main():
         dias_a_procesar.append(dia_actual)
         dia_actual += timedelta(days=1)
 
-    print(f"S'han llançat {len(dias_a_procesar)} dies a la cua de processament amb {max_workers} fils.")
+    print(f"S'han llançat {len(dias_a_procesar)} dies a la cua de processament amb {max_workers} processos.")
 
     dias_exito = []
-    # 3. Llançar el Pool de Processos en Paral·lel
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futurs = {executor.submit(process_single_day, dia, params): dia for dia in dias_a_procesar}
         for fut in as_completed(futurs):
@@ -351,7 +330,6 @@ def main():
             if exito:
                 dias_exito.append(dia)
 
-    # 4. Actualització segura de la data de control
     if dias_exito:
         max_fecha_exito = max(dias_exito)
         conn = get_db_connection(params)
