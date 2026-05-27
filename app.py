@@ -1,57 +1,163 @@
-from flask import Flask, render_template_string
+from flask import Flask, render_template, request, Response
 import boto3
 import pymysql
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='.')
 
-# 1. Recuperem les credencials de la BBDD de forma segura des de Parameter Store
 ssm = boto3.client('ssm', region_name='us-east-1')
+s3 = boto3.client('s3')
 
 try:
     resposta_host = ssm.get_parameter(Name='/bdata-processing-server/env/DB_HOST', WithDecryption=False)
-    DB_HOST = resposta_host['Parameter']['Value']
+    db_host = resposta_host['Parameter']['Value']
 
-    resposta_pass = ssm.get_parameter(Name='/bdata-processing-server/env/DB_PASS', WithDecryption=True)
-    DB_PASSWORD = resposta_pass['Parameter']['Value']
+    resposta_pass = ssm.get_parameter(Name='/bdata-processing-server/env/DB_PASS', WithDecryption=False)
+    db_password = resposta_pass['Parameter']['Value']
 
-    print("🔐 [OK] Credencials del Parameter Store carregades correctament.")
+    resposta_user = ssm.get_parameter(Name='/bdata-processing-server/env/DB_USER', WithDecryption=False)
+    db_user = resposta_user['Parameter']['Value']
+
+    resposta_db_name = ssm.get_parameter(Name='/bdata-processing-server/env/DB_NAME', WithDecryption=False)
+    db_name = resposta_db_name['Parameter']['Value']
+    
+    resposta_region_aws = ssm.get_parameter(Name='/bdata-processing-server/env/AWS_REGION', WithDecryption=False)
+    aws_region = resposta_region_aws['Parameter']['Value']
 except Exception as e:
-    print(f"❌ [ERROR] No s'han pogut carregar els paràmetres de SSM: {e}")
-    DB_HOST = None
-    DB_PASSWORD = None
-# 2. Definim la ruta principal de la pàgina web (El nostre Hello World)
+    print(f"Error al recuperar les credencials: {e}")
+    db_host = None
+    db_password = None
+    db_user = None
+    db_name = None
+    aws_region = None
+
+
+DB_HOST = db_host
+DB_USER = db_user
+DB_PASS = db_password
+DB_NAME = db_name
+AWS_REGION = aws_region
+LIMIT = 2
+
+def get_db_connection():
+    return pymysql.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASS,
+        database=DB_NAME,
+        cursorclass=pymysql.cursors.DictCursor
+    )
+
+# 2. Definim la ruta principal de la pàgina web
 @app.route('/')
 def home():
-    # Plantilla HTML senzilla per fer-ho visible i maco al navegador
-    html_template = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Control de Qualitat de l'Aire</title>
-        <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 50px; background-color: #f4f7f6; color: #333; }
-            .container { background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); max-width: 600px; margin: 0 auto; border-top: 5px solid #2ecc71; }
-            h1 { color: #2c3e50; }
-            .status { background-color: #e8f8f5; color: #2ecc71; padding: 5px 10px; border-radius: 5px; font-weight: bold; display: inline-block; }
-            .info { color: #7f8c8d; font-size: 0.9em; margin-top: 20px; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>📊 Hello World - Panell de Dades de l'Aire</h1>
-            <p>La instància d'EC2 està corrent correctament i és pública de cara a internet.</p>
-            <p>Estat de la connexió segura amb Parameter Store: <span class="status">CONNECTED</span></p>
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
-            <div class="info">
-                <p>📍 <strong>Endpoint RDS connectat:</strong> {{ rds_host }}</p>
-                <p>🚀 <em>Proper pas: Executar l'script de processament i omplir les dades reals a MySQL!</em></p>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-    # Passem el paràmetre de l'endpoint a la web només per confirmar que s'ha llegit bé
-    return render_template_string(html_template, rds_host=DB_HOST if DB_HOST else "Error de càrrega")
+    cursor.execute("""
+        SELECT id, execution_date, update_date_status,
+        start_date, end_date, total_pollution_concentrations_added,
+        id_status, log_s3
+        FROM batch_execution_log;
+        """)
+    batch_executions = cursor.fetchall()
+
+    cursor.execute("""
+        SELECT start_date, end_date, date_last_update, is_running
+        FROM global_variables where id = 1;
+        """)
+    global_vars = cursor.fetchone()
+
+    if global_vars['is_running']:
+        is_running = 'fa fa-check'
+        color = 'green'
+    else:
+        is_running = 'fa fa-times'
+        color = 'red'
+
+    total_records_added = 0
+    global_vars_formatted = {
+        'start_date': global_vars['start_date'].strftime('%Y-%m-%d %H:%M:%S'),
+        'end_date': global_vars['end_date'].strftime('%Y-%m-%d %H:%M:%S'),
+        'date_last_update': global_vars['date_last_update'].strftime('%Y-%m-%d %H:%M:%S'),
+        'is_running': {'icon': is_running, 'color': color},
+        'total_records_added': total_records_added
+    }
+
+    data_to_render = []
+
+    
+
+    for batch_execution in batch_executions:
+
+        color = ''
+        if batch_execution['id_status'] == 1:
+            status = 'fa fa-calendar-check-o'
+            text = 'Programat'
+        elif batch_execution['id_status'] == 2:
+            status = 'fa fa-spinner fa-spin'
+            text = 'Preparant-se per carregar info del CSV'
+        elif batch_execution['id_status'] == 3:
+            status = 'fa fa-spinner fa-spin'
+            text = 'Emmagatzemant la informació a la base de dades'
+        elif batch_execution['id_status'] == 4:
+            status = 'fa fa-check'
+            text = 'Finalitzat correctament'
+            color = 'green'
+        else:
+            status = 'fa fa-times'
+            text = 'Error'
+            color = 'red'
+
+        total_records_added += batch_execution['total_pollution_concentrations_added']
+
+        data_to_render.append({
+            'id': batch_execution['id'],
+            'execution_date': batch_execution['execution_date'].strftime('%Y-%m-%d %H:%M:%S'),
+            'update_date_status': batch_execution['update_date_status'].strftime('%Y-%m-%d %H:%M:%S'),
+            'start_date_batch': batch_execution['start_date'].strftime('%Y-%m-%d %H:%M:%S'),
+            'end_date_batch': batch_execution['end_date'].strftime('%Y-%m-%d %H:%M:%S'),
+            'total_records_pollution_added': batch_execution['total_pollution_concentrations_added'],
+            'status': {'icon': status, 'text': text, 'color': color},
+            'log_s3': batch_execution['log_s3']
+        })
+    
+    conn.close()
+    cursor.close()
+    global_vars_formatted['total_records_added'] = total_records_added
+    return render_template(
+        'index.html',
+        batch_executions=data_to_render,
+        global_vars=global_vars_formatted,
+
+    )
+
+@app.route('/download-log', methods=['POST'])
+def download_log():
+    key_file = request.form.get('log_url')
+    batch_execution = request.form.get('batch_execution_id')
+    
+    if not key_file:
+        return "Error: No s'ha rebut la ruta del log", 400
+    
+    bucket_name = 'bdata-etl-logs'
+
+    try:
+        s3_object = s3.get_object(Bucket=bucket_name, Key=key_file)
+        
+        # Llegim el contingut en cru (bytes o text)
+        log_content = s3_object['Body'].read()
+
+        # 3. Retornem la resposta amb el contingut del fitxer
+        return Response(
+            log_content,
+            mimetype='text/plain',
+            headers={
+                "Content-Disposition": f"attachment; filename=log-file{batch_execution}"
+            }
+        )
+
+    except Exception as e:
+        return f"Error en descarregar el log: {str(e)}", 500
 
 
 # 3. Arrenquem el servidor web al port 8080 accessible des de fora
