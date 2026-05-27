@@ -138,7 +138,28 @@ def init_database(clean=False):
             id_status TINYINT NOT NULL DEFAULT 1,
             log_s3 VARCHAR(255) DEFAULT NULL,
             FOREIGN KEY (id_status) REFERENCES status_batch_execution(id)
-        );"""
+        );""",
+
+        """CREATE TABLE IF NOT EXISTS etl_execution_summary (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            execution_id VARCHAR(36) UNIQUE NOT NULL,
+            process_date DATE NOT NULL,
+            started_at DATETIME NOT NULL,
+            completed_at DATETIME,
+            duration_seconds FLOAT,
+            status ENUM('running', 'success', 'failed') DEFAULT 'running',
+            total_records INT DEFAULT 0,
+            s3_log_path VARCHAR(500),
+            error_message TEXT,
+            error_type VARCHAR(100),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_process_date (process_date),
+            INDEX idx_status (status),
+            INDEX idx_execution_id (execution_id),
+            INDEX idx_started_at (started_at),
+            INDEX idx_status_date (status, process_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;"""
     ])
 
     with connection.cursor() as cursor:

@@ -4,6 +4,8 @@ import sys
 import time
 import threading
 import pandas as pd
+import json
+import uuid
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -20,6 +22,108 @@ available_municipalities = {}
 available_stations = {}
 
 
+# --- 0. LOGGING (S3 + RDS) ---
+class ETLLogger:
+    """Logger que guarda logs detallats en S3 i resums en RDS"""
+
+    def __init__(self, db_params, s3_bucket_logs, s3_prefix='etl-logs'):
+        self.db_params = db_params
+        self.s3_bucket_logs = s3_bucket_logs  # Bucket dedicado para logs
+        self.s3_prefix = s3_prefix
+        self.s3_client = boto3.client('s3', region_name='us-east-1')
+        self.events = []
+
+    def get_db_connection(self):
+        return pymysql.connect(
+            host=self.db_params['DB_HOST'],
+            user=self.db_params['DB_USER'],
+            password=self.db_params['DB_PASS'],
+            database=self.db_params['DB_NAME'],
+            cursorclass=pymysql.cursors.DictCursor
+        )
+
+    def add_event(self, event_type, level='info', message='', data=None):
+        """Añadir evento al log"""
+        self.events.append({
+            'timestamp': datetime.now().isoformat(),
+            'event_type': event_type,
+            'level': level,
+            'message': message,
+            'data': data or {}
+        })
+
+    def log_batch_start(self, execution_id, process_date):
+        """Registrar inicio en RDS"""
+        conn = self.get_db_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                               INSERT INTO etl_execution_summary
+                                   (execution_id, process_date, started_at, status)
+                               VALUES (%s, %s, NOW(), 'running')
+                               """, (execution_id, process_date))
+                conn.commit()
+        finally:
+            conn.close()
+
+    def log_batch_success(self, execution_id, process_date, total_records, duration_seconds, s3_log_path):
+        """Registrar éxito en RDS"""
+        conn = self.get_db_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                               UPDATE etl_execution_summary
+                               SET status           = 'success',
+                                   total_records    = %s,
+                                   duration_seconds = %s,
+                                   completed_at     = NOW(),
+                                   s3_log_path      = %s
+                               WHERE execution_id = %s
+                               """, (total_records, duration_seconds, s3_log_path, execution_id))
+                conn.commit()
+        finally:
+            conn.close()
+
+    def log_batch_error(self, execution_id, error_message, error_type='unknown', s3_log_path=None):
+        """Registrar error en RDS"""
+        conn = self.get_db_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                               UPDATE etl_execution_summary
+                               SET status        = 'failed',
+                                   error_message = %s,
+                                   error_type    = %s,
+                                   completed_at  = NOW(),
+                                   s3_log_path   = %s
+                               WHERE execution_id = %s
+                               """, (error_message[:500], error_type, s3_log_path, execution_id))
+                conn.commit()
+        finally:
+            conn.close()
+
+    def save_to_s3(self, execution_id, process_date):
+        """Guardar log detallado en S3 (bucket dedicado para logs)"""
+        timestamp = datetime.now().isoformat()
+        s3_key = f"{self.s3_prefix}/{process_date}/{execution_id}/{timestamp}.json"
+
+        try:
+            self.s3_client.put_object(
+                Bucket=self.s3_bucket_logs,  # Usar bucket de logs dedicado
+                Key=s3_key,
+                Body=json.dumps({
+                    'collected_at': datetime.now().isoformat(),
+                    'total_events': len(self.events),
+                    'events': self.events
+                }, indent=2, default=str),
+                ContentType='application/json'
+            )
+            return f"s3://{self.s3_bucket_logs}/{s3_key}"
+        except Exception as e:
+            print(f"Error guardando log en S3: {e}")
+            return None
+
+
 # --- 1. CONFIGURACIÓ I CREDENCIALS ---
 def get_ssm_parameters():
     print("Recuperant paràmetres d'AWS Systems Manager...")
@@ -34,6 +138,7 @@ def get_ssm_parameters():
             '/bdata-processing-server/env/ATHENEA_DB',
             '/bdata-processing-server/env/BUCKET_ORIGIN',
             '/bdata-processing-server/env/BUCKET_PROCESSED',
+            '/bdata-processing-server/env/BUCKET_LOGS',
             '/bdata-processing-server/env/CONCURRENT_ETL_WORKERS'
         ]
         response = ssm.get_parameters(Names=names, WithDecryption=True)
@@ -161,14 +266,27 @@ def sync_missing_metadata(df, params):
 # --- 4. PROCÉS DIARI DIRECTE AMB ATHENA ---
 def process_single_day(process_date, params):
     fecha_str = process_date.strftime('%Y-%m-%d')
-    print(f"[{fecha_str}] Iniciant enviament a Athena...")
+    execution_id = str(uuid.uuid4())
+    start_time = time.time()
+
+    # Inicializar logger con bucket dedicado para logs
+    logger = ETLLogger(params, params['BUCKET_LOGS'])
+    logger.add_event('batch_start', 'info', 'Batch iniciado')
+
+    print(f"[{fecha_str}] Iniciant enviament a Athena... (ID: {execution_id[:8]}...)")
+
+    # Log de inicio en RDS
+    try:
+        logger.log_batch_start(execution_id, fecha_str)
+    except Exception as e:
+        print(f"[{fecha_str}] Avís: No s'ha pogut registrar inici: {e}")
+        logger.add_event('batch_start_error', 'error', str(e))
 
     athena = boto3.client('athena', region_name='us-east-1')
     s3_path_output = f"s3://{params['BUCKET_PROCESSED']}/athena-results/"
 
     athena_db = params['ATHENEA_DB']
 
-    # CONSULTA FINAL CORREGIDA - calcular data_parsed en el SELECT, no en CTE sin usar
     query = f"""
         WITH cleaned_lines AS (
             SELECT 
@@ -231,6 +349,8 @@ def process_single_day(process_date, params):
 
     try:
         print(f"[{fecha_str}] Executant consulta Athena...")
+        logger.add_event('athena_query_start', 'info', 'Consulta Athena iniciada')
+
         response = athena.start_query_execution(QueryString=query,
                                                 ResultConfiguration={'OutputLocation': s3_path_output})
         q_id = response['QueryExecutionId']
@@ -247,19 +367,28 @@ def process_single_day(process_date, params):
 
         csv_uri = status_resp['QueryExecution']['ResultConfiguration']['OutputLocation']
         print(f"[{fecha_str}] Resultats a: {csv_uri}")
+        logger.add_event('athena_query_success', 'info', 'Consulta completada', {'csv_uri': csv_uri})
 
         df = pd.read_csv(csv_uri)
 
         if df.empty:
             print(f"[{fecha_str}] Sense dades per processar.")
+            logger.add_event('no_data', 'info', 'No hay datos para procesar')
+
+            # Guardar log en S3 (bucket dedicado)
+            s3_log_path = logger.save_to_s3(execution_id, fecha_str)
+
+            # Actualizar RDS
+            logger.log_batch_success(execution_id, fecha_str, 0, time.time() - start_time, s3_log_path)
             return fecha_str, True
 
-        # Validació de dades
         print(f"[{fecha_str}] Registres obtinguts: {len(df)}")
+        logger.add_event('data_retrieved', 'info', f'{len(df)} registres obtinguts')
 
         df['codi_eoi'] = df['codi_eoi'].astype(str)
 
         sync_missing_metadata(df, params)
+        logger.add_event('metadata_synced', 'info', 'Metadatos sincronizados')
 
         df['id_station'] = df['codi_eoi'].map(available_stations)
         df['id_gas'] = df['contaminant'].map(available_gas)
@@ -268,29 +397,27 @@ def process_single_day(process_date, params):
         total_records = len(df_final)
 
         if total_records == 0:
-            print(f"[{fecha_str}] Cap registre válid després de la validació.")
+            print(f"[{fecha_str}] Cap registre valid.")
+            logger.add_event('no_valid_records', 'warning', 'Cap registre vàlid')
+
+            s3_log_path = logger.save_to_s3(execution_id, fecha_str)
+            logger.log_batch_success(execution_id, fecha_str, 0, time.time() - start_time, s3_log_path)
             return fecha_str, True
 
-        # Preparem les dades per insertar
-        # Busquem la columna de concentració (pot variar el nom)
-        concentration_col = None
-        for col in df_final.columns:
-            if col.startswith('h'):
-                concentration_col = col
-                break
-
-        # IMPORTANT: Convertir TOTS els valors numèrics primer, DESPRÉS reemplazar NaN
-        # Les columnes h01-h24 són les concentracions
+        # Convertir numéricas
         numeric_cols = [col for col in df_final.columns if col.startswith('h') or col in ['altitud', 'magnitud']]
         for col in numeric_cols:
             if col in df_final.columns:
                 df_final[col] = pd.to_numeric(df_final[col], errors='coerce')
 
-        # CRITICAL: Reemplazar TOTS els NaN per None - usar fillna que és més fiable
         df_final = df_final.fillna(value=None)
+        logger.add_event('data_cleaned', 'info', 'Dades netejades')
 
-        # Verificar que no hi ha NaN residuals
-        nan_count = df_final.isnull().sum().sum()
+        concentration_col = None
+        for col in df_final.columns:
+            if col.startswith('h'):
+                concentration_col = col
+                break
 
         connection = get_db_connection(params)
         with connection.cursor() as cursor:
@@ -305,7 +432,6 @@ def process_single_day(process_date, params):
                          )
                          """
 
-            # Construir tuples con conversión explícita de tipos
             tuples_to_insert = []
             for _, row in df_final.iterrows():
                 try:
@@ -316,7 +442,7 @@ def process_single_day(process_date, params):
 
                     tuples_to_insert.append((id_station, id_gas, data_parsed, concentration))
                 except (ValueError, TypeError) as e:
-                    print(f"[{fecha_str}] Avís: Error convertint registre: {e}")
+                    logger.add_event('data_conversion_error', 'warning', f'Error: {e}')
                     continue
 
             if tuples_to_insert:
@@ -330,11 +456,36 @@ def process_single_day(process_date, params):
             connection.commit()
 
         connection.close()
-        print(f"[{fecha_str}] ✓ Èxit! {total_records} files inserides correctament.")
+
+        duration_seconds = time.time() - start_time
+        print(f"[{fecha_str}] ✓ Èxit! {total_records} files inserides en {duration_seconds:.1f}s.")
+        logger.add_event('batch_success', 'info', 'Batch completat', {
+            'total_records': total_records,
+            'duration_seconds': duration_seconds
+        })
+
+        # Guardar log en S3 (bucket dedicado)
+        s3_log_path = logger.save_to_s3(execution_id, fecha_str)
+
+        # Actualizar RDS con éxito
+        logger.log_batch_success(execution_id, fecha_str, total_records, duration_seconds, s3_log_path)
         return fecha_str, True
 
     except Exception as e:
+        duration_seconds = time.time() - start_time
         print(f"[{fecha_str}] ✗ ERROR CRÍTIC: {e}")
+        logger.add_event('batch_error', 'error', str(e), {
+            'error_type': type(e).__name__,
+            'duration_seconds': duration_seconds
+        })
+
+        # Guardar log en S3 (bucket dedicado) incluso con error
+        s3_log_path = logger.save_to_s3(execution_id, fecha_str)
+
+        # Actualizar RDS con error
+        logger.log_batch_error(execution_id, str(e)[:500], type(e).__name__, s3_log_path)
+
+        # También actualizar batch_execution_log (si existe)
         try:
             conn = get_db_connection(params)
             with conn.cursor() as cursor:
@@ -344,6 +495,7 @@ def process_single_day(process_date, params):
             conn.close()
         except:
             pass
+
         return fecha_str, False
 
 
