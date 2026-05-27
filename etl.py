@@ -168,7 +168,7 @@ def process_single_day(process_date, params):
 
     athena_db = params['ATHENEA_DB']
 
-    # CONSULTA CORREGIDA per manejar els formats problemàtics de linea_text
+    # CONSULTA FINAL CORREGIDA - calcular data_parsed en el SELECT, no en CTE sin usar
     query = f"""
         WITH cleaned_lines AS (
             SELECT 
@@ -200,7 +200,7 @@ def process_single_day(process_date, params):
             json_extract_scalar(registre, '$.codi_eoi') AS codi_eoi,
             json_extract_scalar(registre, '$.nom_estacio') AS nom_estacio,
             json_extract_scalar(registre, '$.data') AS data_raw,
-            TRY(cast(substring(json_extract_scalar(registre, '$.data'), 1, 10) as date)) as data_parsed,
+            TRY(CAST(SUBSTRING(json_extract_scalar(registre, '$.data'), 1, 10) AS DATE)) AS data_parsed,
             json_extract_scalar(registre, '$.magnitud') AS magnitud,
             json_extract_scalar(registre, '$.contaminant') AS contaminant,
             json_extract_scalar(registre, '$.unitats') AS unitats,
@@ -226,7 +226,7 @@ def process_single_day(process_date, params):
             json_extract_scalar(registre, '$.h21') AS h21, json_extract_scalar(registre, '$.h22') AS h22,
             json_extract_scalar(registre, '$.h23') AS h23, json_extract_scalar(registre, '$.h24') AS h24
         FROM parsed_data
-        WHERE data_parsed = DATE '{fecha_str}'
+        WHERE TRY(CAST(SUBSTRING(json_extract_scalar(registre, '$.data'), 1, 10) AS DATE)) = DATE '{fecha_str}'
     """
 
     try:
