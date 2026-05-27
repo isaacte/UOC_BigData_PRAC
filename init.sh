@@ -8,7 +8,11 @@ cd /home/ec2-user
 git clone https://github.com/isaacte/UOC_BigData_PRAC app_code
 cd app_code
 
+python3 -m venv venv
+source venv/bin/activate
+
 # 3. Instal·lar llibreries de python
+pip install --upgrade pip
 pip3 install -r requirements.txt
 
 # 4. Executar l'script de creació de taules

@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 WorkingDirectory=/home/ec2-user/app_code
-ExecStart=/usr/bin/python3 -m flask run --host=0.0.0.0 --port=80
+ExecStart=/home/ec2-user/app_code/venv/bin/python -m flask run --host=0.0.0.0 --port=80
 Restart=always
 
 [Install]
