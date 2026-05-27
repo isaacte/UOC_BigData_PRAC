@@ -6,7 +6,7 @@ import threading
 import pandas as pd
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
+import warnings
 # Ignorar deprecated
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
