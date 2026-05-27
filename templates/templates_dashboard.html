@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ETL Dashboard - Air Quality</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --aws-orange: #FF9900;
+            --success: #28a745;
+            --danger: #dc3545;
+            --warning: #ffc107;
+            --info: #17a2b8;
+        }
+
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, var(--aws-orange) 0%, #ff8c00 100%);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+            color: white !important;
+        }
+
+        .stat-card {
+            background: white;
+            border-left: 4px solid var(--aws-orange);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .stat-card h5 {
+            color: #666;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--aws-orange);
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            padding: 0;
+            margin-bottom: 20px;
+        }
+
+        .table {
+            margin-bottom: 0;
+        }
+
+        .table thead {
+            background-color: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .table thead th {
+            color: #495057;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            padding: 15px;
+            border: none;
+        }
+
+        .table tbody tr {
+            border-bottom: 1px solid #dee2e6;
+            transition: background-color 0.2s;
+        }
+
+        .table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .table tbody td {
+            padding: 15px;
+            vertical-align: middle;
+        }
+
+        .badge-success {
+            background-color: var(--success);
+            padding: 6px 12px;
+        }
+
+        .badge-danger {
+            background-color: var(--danger);
+            padding: 6px 12px;
+        }
+
+        .badge-warning {
+            background-color: var(--warning);
+            padding: 6px 12px;
+            color: #333;
+        }
+
+        .cursor-pointer {
+            cursor: pointer;
+        }
+
+        .modal-header {
+            background-color: var(--aws-orange);
+            color: white;
+        }
+
+        .modal-header .btn-close {
+            filter: brightness(0) invert(1);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid var(--aws-orange);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .refresh-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 0.8rem;
+            background-color: #e9ecef;
+            padding: 5px 10px;
+            border-radius: 20px;
+        }
+
+        .section-title {
+            color: #333;
+            font-weight: 700;
+            margin-bottom: 20px;
+            border-left: 4px solid var(--aws-orange);
+            padding-left: 15px;
+        }
+
+        .event-item {
+            padding: 10px;
+            border-left: 3px solid #ddd;
+            margin-bottom: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .event-item.error {
+            border-left-color: var(--danger);
+            background-color: #fff5f5;
+        }
+
+        .event-item.warning {
+            border-left-color: var(--warning);
+            background-color: #fffbf0;
+        }
+
+        .event-item.success {
+            border-left-color: var(--success);
+            background-color: #f0fdf4;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-dark">
+        <div class="container-fluid">
+            <span class="navbar-brand">
+                <i class="bi bi-graph-up"></i> ETL Dashboard - Air Quality
+            </span>
+            <span class="refresh-badge" id="refreshStatus">
+                <i class="bi bi-arrow-clockwise"></i> Auto-refresh
+            </span>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container-fluid mt-4">
+
+        <!-- Stats Row -->
+        <div class="row mb-4" id="statsContainer">
+            <div class="col-md-2">
+                <div class="stat-card">
+                    <h5>Total Ejecuciones</h5>
+                    <div class="stat-value" id="totalExecutions">-</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="stat-card">
+                    <h5>Exitosas</h5>
+                    <div class="stat-value" id="successCount" style="color: var(--success)">-</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="stat-card">
+                    <h5>Fallidas</h5>
+                    <div class="stat-value" id="failedCount" style="color: var(--danger)">-</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="stat-card">
+                    <h5>Tasa Éxito</h5>
+                    <div class="stat-value" id="successRate" style="color: var(--info)">-</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="stat-card">
+                    <h5>Duración Promedio</h5>
+                    <div class="stat-value" id="avgDuration" style="font-size: 1.5rem;">-</div>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="stat-card">
+                    <h5>Último Registro</h5>
+                    <div id="lastRun" style="font-size: 0.9rem; color: #666;">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Executions Table -->
+        <div class="row">
+            <div class="col-12">
+                <h3 class="section-title">Últimas Ejecuciones (7 días)</h3>
+                <div class="table-container">
+                    <table class="table table-hover mb-0" id="executionsTable">
+                        <thead>
+                            <tr>
+                                <th>ID Ejecución</th>
+                                <th>Fecha Proceso</th>
+                                <th>Estado</th>
+                                <th>Inicio</th>
+                                <th>Duración</th>
+                                <th>Registros</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="executionsBody">
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">
+                                    <div class="loading"></div> Cargando...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Execution Details Modal -->
+    <div class="modal fade" id="detailsModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">Detalles de Ejecución</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="modalBody">
+                    <div class="loading"></div> Cargando detalles...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        const REFRESH_INTERVAL = 30000; // 30 segundos
+
+        function formatDate(dateString) {
+            if (!dateString) return '-';
+            return new Date(dateString).toLocaleString('es-ES');
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds) return '-';
+            return Math.round(seconds) + 's';
+        }
+
+        function getStatusBadge(status) {
+            const badges = {
+                'success': '<span class="badge badge-success"><i class="bi bi-check-circle"></i> Éxito</span>',
+                'failed': '<span class="badge badge-danger"><i class="bi bi-x-circle"></i> Error</span>',
+                'running': '<span class="badge badge-warning"><i class="bi bi-hourglass-split"></i> En curso</span>'
+            };
+            return badges[status] || status;
+        }
+
+        function loadStats() {
+            $.get('/api/system-stats', function(data) {
+                $('#totalExecutions').text(data.total_executions);
+                $('#successCount').text(data.successful);
+                $('#failedCount').text(data.failed);
+                $('#successRate').text(data.success_rate + '%');
+                $('#avgDuration').text(formatDuration(data.avg_duration));
+                $('#lastRun').text(data.last_run ? formatDate(data.last_run) : '-');
+            }).fail(function() {
+                console.error('Error cargando estadísticas');
+            });
+        }
+
+        function loadExecutions() {
+            $.get('/api/recent-executions', function(data) {
+                let html = '';
+                if (data.length === 0) {
+                    html = '<tr><td colspan="7" class="text-center text-muted">No hay ejecuciones</td></tr>';
+                } else {
+                    data.forEach(exec => {
+                        html += `
+                            <tr class="cursor-pointer" onclick="showDetails('${exec.execution_id}')">
+                                <td><code>${exec.execution_id.substring(0, 8)}...</code></td>
+                                <td>${exec.process_date || '-'}</td>
+                                <td>${getStatusBadge(exec.status)}</td>
+                                <td>${formatDate(exec.started_at)}</td>
+                                <td>${formatDuration(exec.duration_seconds)}</td>
+                                <td><strong>${exec.total_records}</strong></td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="showDetails('${exec.execution_id}'); event.stopPropagation();">
+                                        <i class="bi bi-eye"></i> Ver
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+                $('#executionsBody').html(html);
+            }).fail(function() {
+                console.error('Error cargando ejecuciones');
+            });
+        }
+
+        function showDetails(executionId) {
+            const modal = new bootstrap.Modal(document.getElementById('detailsModal'));
+            $('#modalBody').html('<div class="loading"></div> Cargando detalles...');
+            modal.show();
+
+            $.get(`/api/execution/${executionId}`, function(data) {
+                let html = `
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>ID Ejecución:</strong><br>
+                            <code>${data.execution_id}</code>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Estado:</strong><br>
+                            ${getStatusBadge(data.status)}
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Fecha Proceso:</strong><br>
+                            ${data.process_date || '-'}
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Duración:</strong><br>
+                            ${formatDuration(data.duration_seconds)}
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Inicio:</strong><br>
+                            ${formatDate(data.started_at)}
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Finalización:</strong><br>
+                            ${formatDate(data.completed_at)}
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Registros Procesados:</strong><br>
+                            <span class="badge bg-info">${data.total_records}</span>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Ruta Log S3:</strong><br>
+                            ${data.s3_log_path ? `<code>${data.s3_log_path}</code>` : '-'}
+                        </div>
+                    </div>
+                `;
+
+                if (data.error_message) {
+                    html += `
+                        <div class="alert alert-danger mt-3">
+                            <strong>Error:</strong> ${data.error_message}<br>
+                            <small>Tipo: ${data.error_type}</small>
+                        </div>
+                    `;
+                }
+
+                if (data.s3_log && data.s3_log.events) {
+                    html += `
+                        <div class="mt-3">
+                            <h6>Eventos (${data.s3_log.total_events})</h6>
+                            <div style="max-height: 400px; overflow-y: auto;">
+                    `;
+                    data.s3_log.events.forEach(event => {
+                        const eventClass = event.level === 'error' ? 'error' : (event.level === 'warning' ? 'warning' : 'success');
+                        html += `
+                            <div class="event-item ${eventClass}">
+                                <small>${formatDate(event.timestamp)}</small><br>
+                                <strong>${event.event_type}</strong>: ${event.message}
+                            </div>
+                        `;
+                    });
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                }
+
+                $('#modalBody').html(html);
+                $('#modalTitle').text(`Detalles - ${executionId.substring(0, 8)}`);
+            }).fail(function() {
+                $('#modalBody').html('<div class="alert alert-danger">Error cargando detalles</div>');
+            });
+        }
+
+        // Cargar datos al iniciar
+        $(document).ready(function() {
+            loadStats();
+            loadExecutions();
+
+            // Auto-refresh
+            setInterval(function() {
+                loadStats();
+                loadExecutions();
+            }, REFRESH_INTERVAL);
+        });
+    </script>
+</body>
+</html>

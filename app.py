@@ -1,44 +1,62 @@
-from flask import Flask, render_template, request, Response
+from flask import Flask, render_template, jsonify
 import boto3
 import pymysql
+import json
 
-app = Flask(__name__, template_folder='.')
+app = Flask(__name__, template_folder='templates')
 
+# ========== LECTURA DE PARÁMETROS SSM ==========
 ssm = boto3.client('ssm', region_name='us-east-1')
-s3 = boto3.client('s3')
+s3 = boto3.client('s3', region_name='us-east-1')
+
+print("📝 Recuperando parámetros de SSM Parameter Store...")
 
 try:
-    resposta_host = ssm.get_parameter(Name='/bdata-processing-server/env/DB_HOST', WithDecryption=False)
-    db_host = resposta_host['Parameter']['Value']
+    # DB HOST
+    response_host = ssm.get_parameter(Name='/bdata-processing-server/env/DB_HOST', WithDecryption=False)
+    DB_HOST = response_host['Parameter']['Value']
 
-    resposta_pass = ssm.get_parameter(Name='/bdata-processing-server/env/DB_PASS', WithDecryption=False)
-    db_password = resposta_pass['Parameter']['Value']
+    # DB USER
+    response_user = ssm.get_parameter(Name='/bdata-processing-server/env/DB_USER', WithDecryption=False)
+    DB_USER = response_user['Parameter']['Value']
 
-    resposta_user = ssm.get_parameter(Name='/bdata-processing-server/env/DB_USER', WithDecryption=False)
-    db_user = resposta_user['Parameter']['Value']
+    # DB PASSWORD
+    response_pass = ssm.get_parameter(Name='/bdata-processing-server/env/DB_PASS', WithDecryption=False)
+    DB_PASS = response_pass['Parameter']['Value']
 
-    resposta_db_name = ssm.get_parameter(Name='/bdata-processing-server/env/DB_NAME', WithDecryption=False)
-    db_name = resposta_db_name['Parameter']['Value']
-    
-    resposta_region_aws = ssm.get_parameter(Name='/bdata-processing-server/env/AWS_REGION', WithDecryption=False)
-    aws_region = resposta_region_aws['Parameter']['Value']
+    # DB NAME
+    response_db_name = ssm.get_parameter(Name='/bdata-processing-server/env/DB_NAME', WithDecryption=False)
+    DB_NAME = response_db_name['Parameter']['Value']
+
+    # BUCKET LOGS
+    response_bucket = ssm.get_parameter(Name='/bdata-processing-server/env/BUCKET_LOGS', WithDecryption=False)
+    BUCKET_LOGS = response_bucket['Parameter']['Value']
+
+    # AWS REGION
+    response_region = ssm.get_parameter(Name='/bdata-processing-server/env/AWS_REGION', WithDecryption=False)
+    AWS_REGION = response_region['Parameter']['Value']
+
+    print("✅ Parámetros cargados correctamente")
+    print(f"   Host: {DB_HOST}")
+    print(f"   BD: {DB_NAME}")
+    print(f"   Bucket Logs: {BUCKET_LOGS}")
+    print(f"   Región: {AWS_REGION}")
+
 except Exception as e:
-    print(f"Error al recuperar les credencials: {e}")
-    db_host = None
-    db_password = None
-    db_user = None
-    db_name = None
-    aws_region = None
+    print(f"❌ Error recuperando parámetros SSM: {e}")
+    DB_HOST = None
+    DB_USER = None
+    DB_PASS = None
+    DB_NAME = None
+    BUCKET_LOGS = None
+    AWS_REGION = None
+    raise
 
 
-DB_HOST = db_host
-DB_USER = db_user
-DB_PASS = db_password
-DB_NAME = db_name
-AWS_REGION = aws_region
-LIMIT = 2
+# ========== FUNCIONES DE CONEXIÓN ==========
 
 def get_db_connection():
+    """Obtener conexión a la base de datos"""
     return pymysql.connect(
         host=DB_HOST,
         user=DB_USER,
@@ -47,120 +65,278 @@ def get_db_connection():
         cursorclass=pymysql.cursors.DictCursor
     )
 
-# 2. Definim la ruta principal de la pàgina web
+
+# ========== RUTAS ==========
+
 @app.route('/')
-def home():
-    conn = get_db_connection()
-    cursor = conn.cursor()
+def dashboard():
+    """Página principal del dashboard"""
+    return render_template('dashboard.html')
 
-    cursor.execute("""
-        SELECT id, execution_date, update_date_status,
-        start_date, end_date, total_pollution_concentrations_added,
-        id_status, log_s3
-        FROM batch_execution_log;
-        """)
-    batch_executions = cursor.fetchall()
 
-    cursor.execute("""
-        SELECT start_date, end_date, date_last_update, is_running
-        FROM global_variables where id = 1;
-        """)
-    global_vars = cursor.fetchone()
-
-    if global_vars['is_running']:
-        is_running = 'fa fa-check'
-        color = 'green'
-    else:
-        is_running = 'fa fa-times'
-        color = 'red'
-
-    total_records_added = 0
-    global_vars_formatted = {
-        'start_date': global_vars['start_date'].strftime('%Y-%m-%d %H:%M:%S'),
-        'end_date': global_vars['end_date'].strftime('%Y-%m-%d %H:%M:%S'),
-        'date_last_update': global_vars['date_last_update'].strftime('%Y-%m-%d %H:%M:%S'),
-        'is_running': {'icon': is_running, 'color': color},
-        'total_records_added': total_records_added
-    }
-
-    data_to_render = []
-
-    
-
-    for batch_execution in batch_executions:
-
-        color = ''
-        if batch_execution['id_status'] == 1:
-            status = 'fa fa-calendar-check-o'
-            text = 'Programat'
-        elif batch_execution['id_status'] == 2:
-            status = 'fa fa-spinner fa-spin'
-            text = 'Preparant-se per carregar info del CSV'
-        elif batch_execution['id_status'] == 3:
-            status = 'fa fa-spinner fa-spin'
-            text = 'Emmagatzemant la informació a la base de dades'
-        elif batch_execution['id_status'] == 4:
-            status = 'fa fa-check'
-            text = 'Finalitzat correctament'
-            color = 'green'
-        else:
-            status = 'fa fa-times'
-            text = 'Error'
-            color = 'red'
-
-        total_records_added += batch_execution['total_pollution_concentrations_added']
-
-        data_to_render.append({
-            'id': batch_execution['id'],
-            'execution_date': batch_execution['execution_date'].strftime('%Y-%m-%d %H:%M:%S'),
-            'update_date_status': batch_execution['update_date_status'].strftime('%Y-%m-%d %H:%M:%S'),
-            'start_date_batch': batch_execution['start_date'].strftime('%Y-%m-%d %H:%M:%S'),
-            'end_date_batch': batch_execution['end_date'].strftime('%Y-%m-%d %H:%M:%S'),
-            'total_records_pollution_added': batch_execution['total_pollution_concentrations_added'],
-            'status': {'icon': status, 'text': text, 'color': color},
-            'log_s3': batch_execution['log_s3']
-        })
-    
-    conn.close()
-    cursor.close()
-    global_vars_formatted['total_records_added'] = total_records_added
-    return render_template(
-        'index.html',
-        batch_executions=data_to_render,
-        global_vars=global_vars_formatted,
-
-    )
-
-@app.route('/download-log', methods=['POST'])
-def download_log():
-    key_file = request.form.get('log_url')
-    batch_execution = request.form.get('batch_execution_id')
-    
-    if not key_file:
-        return "Error: No s'ha rebut la ruta del log", 400
-    
-    bucket_name = 'bdata-etl-logs'
-
+@app.route('/api/health')
+def health():
+    """Verificar conexión a BD"""
     try:
-        s3_object = s3.get_object(Bucket=bucket_name, Key=key_file)
-        
-        # Llegim el contingut en cru (bytes o text)
-        log_content = s3_object['Body'].read()
-
-        # 3. Retornem la resposta amb el contingut del fitxer
-        return Response(
-            log_content,
-            mimetype='text/plain',
-            headers={
-                "Content-Disposition": f"attachment; filename=log-file{batch_execution}"
-            }
-        )
-
+        conn = get_db_connection()
+        conn.close()
+        return jsonify({
+            'status': 'ok',
+            'message': 'Conectado a RDS',
+            'database': DB_NAME,
+            'host': DB_HOST
+        })
     except Exception as e:
-        return f"Error en descarregar el log: {str(e)}", 500
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 
-# 3. Arrenquem el servidor web al port 8080 accessible des de fora
+@app.route('/api/system-stats')
+def system_stats():
+    """Estadísticas generales del sistema"""
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            # Total de ejecuciones
+            cursor.execute("SELECT COUNT(*) as total FROM etl_execution_summary")
+            total = cursor.fetchone()['total']
+
+            # Ejecuciones exitosas
+            cursor.execute("SELECT COUNT(*) as success FROM etl_execution_summary WHERE status='success'")
+            success = cursor.fetchone()['success']
+
+            # Ejecuciones fallidas
+            cursor.execute("SELECT COUNT(*) as failed FROM etl_execution_summary WHERE status='failed'")
+            failed = cursor.fetchone()['failed']
+
+            # Total de registros procesados
+            cursor.execute("SELECT SUM(total_records) as records FROM etl_execution_summary WHERE status='success'")
+            result = cursor.fetchone()
+            records = result['records'] if result['records'] else 0
+
+            # Duración promedio
+            cursor.execute(
+                "SELECT AVG(duration_seconds) as avg_duration FROM etl_execution_summary WHERE status='success'")
+            result = cursor.fetchone()
+            avg_duration = result['avg_duration'] if result['avg_duration'] else 0
+
+            # Última ejecución
+            cursor.execute("SELECT MAX(started_at) as last_run FROM etl_execution_summary")
+            result = cursor.fetchone()
+            last_run = result['last_run']
+
+        conn.close()
+
+        success_rate = (success / total * 100) if total > 0 else 0
+
+        return jsonify({
+            'total_executions': total,
+            'successful': success,
+            'failed': failed,
+            'total_records': int(records),
+            'avg_duration': round(avg_duration, 2),
+            'last_run': last_run.isoformat() if last_run else None,
+            'success_rate': round(success_rate, 1)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/recent-executions')
+def recent_executions():
+    """Últimas ejecuciones (últimos 7 días)"""
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                           SELECT execution_id,
+                                  process_date,
+                                  status,
+                                  started_at,
+                                  completed_at,
+                                  duration_seconds,
+                                  total_records,
+                                  error_message
+                           FROM etl_execution_summary
+                           WHERE started_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+                           ORDER BY started_at DESC LIMIT 100
+                           """)
+            executions = cursor.fetchall()
+
+        conn.close()
+
+        # Formatear resultados
+        result = []
+        for ex in executions:
+            result.append({
+                'execution_id': ex['execution_id'],
+                'process_date': ex['process_date'].isoformat() if ex['process_date'] else None,
+                'status': ex['status'],
+                'started_at': ex['started_at'].isoformat() if ex['started_at'] else None,
+                'completed_at': ex['completed_at'].isoformat() if ex['completed_at'] else None,
+                'duration_seconds': ex['duration_seconds'],
+                'total_records': ex['total_records'],
+                'error_message': ex['error_message'][:100] if ex['error_message'] else None
+            })
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/executions-by-date/<date>')
+def executions_by_date(date):
+    """Ejecuciones de un día específico"""
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                           SELECT execution_id,
+                                  status,
+                                  started_at,
+                                  completed_at,
+                                  duration_seconds,
+                                  total_records,
+                                  error_message,
+                                  s3_log_path
+                           FROM etl_execution_summary
+                           WHERE process_date = %s
+                           ORDER BY started_at DESC
+                           """, (date,))
+            executions = cursor.fetchall()
+
+        conn.close()
+
+        result = []
+        for ex in executions:
+            result.append({
+                'execution_id': ex['execution_id'],
+                'status': ex['status'],
+                'started_at': ex['started_at'].isoformat() if ex['started_at'] else None,
+                'completed_at': ex['completed_at'].isoformat() if ex['completed_at'] else None,
+                'duration_seconds': ex['duration_seconds'],
+                'total_records': ex['total_records'],
+                'error_message': ex['error_message'],
+                's3_log_path': ex['s3_log_path']
+            })
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/execution/<execution_id>')
+def execution_details(execution_id):
+    """Detalles de una ejecución específica"""
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                           SELECT execution_id,
+                                  process_date,
+                                  status,
+                                  started_at,
+                                  completed_at,
+                                  duration_seconds,
+                                  total_records,
+                                  error_message,
+                                  error_type,
+                                  s3_log_path
+                           FROM etl_execution_summary
+                           WHERE execution_id = %s
+                           """, (execution_id,))
+            execution = cursor.fetchone()
+
+        conn.close()
+
+        if not execution:
+            return jsonify({'error': 'No encontrado'}), 404
+
+        result = {
+            'execution_id': execution['execution_id'],
+            'process_date': execution['process_date'].isoformat() if execution['process_date'] else None,
+            'status': execution['status'],
+            'started_at': execution['started_at'].isoformat() if execution['started_at'] else None,
+            'completed_at': execution['completed_at'].isoformat() if execution['completed_at'] else None,
+            'duration_seconds': execution['duration_seconds'],
+            'total_records': execution['total_records'],
+            'error_message': execution['error_message'],
+            'error_type': execution['error_type'],
+            's3_log_path': execution['s3_log_path']
+        }
+
+        # Si hay log en S3, intentar traerlo
+        if execution['s3_log_path']:
+            try:
+                # Extraer bucket y key
+                parts = execution['s3_log_path'].replace('s3://', '').split('/', 1)
+                bucket = parts[0]
+                key = parts[1]
+
+                obj = s3.get_object(Bucket=bucket, Key=key)
+                log_content = json.loads(obj['Body'].read().decode('utf-8'))
+                result['s3_log'] = log_content
+            except Exception as e:
+                result['s3_log_error'] = f"No se pudo leer log de S3: {str(e)}"
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/statistics')
+def statistics():
+    """Estadísticas por fecha"""
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                           SELECT process_date,
+                                  COUNT(*)                                            as total_executions,
+                                  SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful,
+                                  SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END)  as failed,
+                                  SUM(total_records)                                  as total_records,
+                                  AVG(duration_seconds)                               as avg_duration
+                           FROM etl_execution_summary
+                           GROUP BY process_date
+                           ORDER BY process_date DESC LIMIT 30
+                           """)
+            stats = cursor.fetchall()
+
+        conn.close()
+
+        result = []
+        for stat in stats:
+            result.append({
+                'process_date': stat['process_date'].isoformat() if stat['process_date'] else None,
+                'total_executions': stat['total_executions'],
+                'successful': stat['successful'],
+                'failed': stat['failed'],
+                'total_records': stat['total_records'],
+                'avg_duration': round(stat['avg_duration'], 2) if stat['avg_duration'] else 0
+            })
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({'error': 'No encontrado'}), 404
+
+
+@app.errorhandler(500)
+def server_error(error):
+    return jsonify({'error': 'Error interno del servidor'}), 500
+
+
+# ========== MAIN ==========
+
 if __name__ == '__main__':
-    print("🚀 Aixecant el servidor Flask al port 8080...")
-    app.run(host='0.0.0.0', port=8080)
+    print("\n🚀 Iniciando servidor Flask en puerto 8080...")
+    print(f"   URL: http://localhost:8080")
+    print(f"   Dashboard: http://localhost:8080/\n")
+    app.run(host='0.0.0.0', port=8080, debug=False)
