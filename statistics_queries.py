@@ -10,6 +10,30 @@ class StatisticsQueries:
         self.pollution_gas = pollution_gas
         self.stations = stations
     
+    def check_if_exists_data(self) -> bool:
+        """
+        Funció que permet saber si hi ha informació entre les dues dates
+        """
+
+
+        query = """
+            SELECT COUNT(*) as num
+            FROM pollution_concentration pc
+            WHERE
+                date(pc.date_measurement) BETWEEN '@@start_date@@' AND '@@end_date@@'
+        """
+
+        query = query \
+            .replace("@@start_date@@", self.start_date) \
+            .replace("@@end_date@@", self.end_date)
+        
+        self.cursor.execute(query)
+        query_result = int(self.cursor.fetchone()['num'])
+
+        return query_result > 0
+            
+
+
     def execute_avg_concentration_gas(self) -> list:
         """
         Funció que permet obtenir la mitjana de gasos emesos entre dates.
