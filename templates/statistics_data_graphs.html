@@ -1,665 +1,128 @@
-<!DOCTYPE html>
-<html lang="ca">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Resultats de Cerca</title>
-
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-
-    <style>
-        :root {
-            --aws-orange: #FF9900;
-            --aws-dark: #232F3E;
-            --text-dark: #232F3E;
-            --text-light: #666666;
-            --bg-light: #f8f9fa;
-            --border-color: #e0e0e0;
-        }
-
-        * {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-        }
-
-        body {
-            background: #f5f5f5;
-            color: var(--text-dark);
-        }
-
-        .results-header {
-            background: white;
-            border-bottom: 2px solid var(--aws-orange);
-            padding: 1.5rem 0;
-            margin-bottom: 2rem;
-        }
-
-        .results-header h2 {
-            color: var(--aws-dark);
-            font-weight: 700;
-            margin: 0;
-        }
-
-        .alert-warning {
-            border: none;
-            background: #fff3cd;
-            color: #856404;
-            border-radius: 6px;
-            padding: 1rem 1.5rem;
-        }
-
-        .table-card {
-            background: white;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            overflow: hidden;
-            margin-bottom: 2rem;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-        }
-
-        .table-card-title {
-            background: linear-gradient(90deg, var(--aws-dark) 0%, #1a1a1a 100%);
-            color: white;
-            padding: 1rem 1.5rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin: 0;
-        }
-
-        .table-card-title i {
-            color: var(--aws-orange);
-        }
-
-        .table {
-            margin-bottom: 0;
-            font-size: 0.95rem;
-        }
-
-        .table thead {
-            background: var(--bg-light);
-            border-bottom: 2px solid var(--border-color);
-        }
-
-        .table thead th {
-            color: var(--aws-dark);
-            font-weight: 600;
-            padding: 1rem;
-            border: none;
-        }
-
-        .table tbody tr {
-            transition: background-color 0.2s;
-        }
-
-        .table tbody tr:hover {
-            background: #f9f9f9;
-        }
-
-        .table tbody td {
-            padding: 0.8rem 1rem;
-            vertical-align: middle;
-            border-color: var(--border-color);
-        }
-
-        .chart-container {
-            background: white;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-        }
-
-        .chart-tooltip {
-            position: absolute;
-            text-align: center;
-            padding: 10px 15px;
-            font-size: 12px;
-            background: rgba(35, 47, 62, 0.95);
-            color: white;
-            border-radius: 6px;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.2s;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            z-index: 1000;
-            border-left: 3px solid var(--aws-orange);
-        }
-
-        #map {
-            height: 500px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-        }
-
-        .leaflet-popup-content-wrapper {
-            background: var(--aws-dark);
-            color: white;
-            border-radius: 8px;
-            padding: 8px;
-        }
-
-        .leaflet-popup-tip {
-            background: var(--aws-dark);
-        }
-
-        svg {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
-
-        .map-container {
-            background: white;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-        }
-
-        .map-title {
-            font-weight: 600;
-            color: var(--aws-dark);
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .map-title i {
-            color: var(--aws-orange);
-        }
-
-        @media (max-width: 768px) {
-            .table {
-                font-size: 0.85rem;
-            }
-
-            .table-card-title {
-                padding: 0.8rem 1rem;
-            }
-
-            #map {
-                height: 300px;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container-fluid py-4">
-        <!-- Results Header -->
-        <div class="results-header">
-            <div class="container-fluid">
-                <h2><i class="fas fa-chart-line"></i> Resultats de la Cerca</h2>
-            </div>
-        </div>
-
-        <!-- No Data Alert -->
-        {% if not info.has_data %}
-            <div class="container-fluid">
-                <div class="alert alert-warning" role="alert">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <strong>Sense dades.</strong> No s'han trobat registres que coincideixin amb els filtres seleccionats.
-                    Prova a ampliar el rang de dates o a seleccionar altres gasos/estacions.
-                </div>
-            </div>
-        {% else %}
-
-        <div class="container-fluid">
-            <!-- Taula Concentració Màxima -->
-            {% if info.maximum_concentration_gas %}
-            <div class="table-card">
-                <h5 class="table-card-title">
-                    <i class="fas fa-arrow-up"></i> Concentració Màxima de Gasos
-                </h5>
-                <div class="table-responsive">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Concentració</th>
-                                <th>Contaminant</th>
-                                <th>Data de Mesura</th>
-                                <th>Municipalitat</th>
-                                <th>Estació</th>
-                                <th>Tipus d'Estació</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for gas in info.maximum_concentration_gas %}
-                            <tr>
-                                <td><strong style="color: var(--aws-orange);">{{ gas.max_concentration }}</strong></td>
-                                <td>{{ gas.name_gas }} <span class="text-muted">({{ gas.name_units }})</span></td>
-                                <td>{{ gas.date_measurement }}</td>
-                                <td>{{ gas.name_municipality }}</td>
-                                <td>{{ gas.name_station }}</td>
-                                <td><span class="badge bg-info">{{ gas.name_type }}</span></td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            {% endif %}
-
-            <!-- Taula Concentració Mínima -->
-            {% if info.minimum_concentration_gas %}
-            <div class="table-card">
-                <h5 class="table-card-title">
-                    <i class="fas fa-arrow-down"></i> Concentració Mínima de Gasos
-                </h5>
-                <div class="table-responsive">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Concentració</th>
-                                <th>Contaminant</th>
-                                <th>Data de Mesura</th>
-                                <th>Municipalitat</th>
-                                <th>Estació</th>
-                                <th>Tipus d'Estació</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for gas in info.minimum_concentration_gas %}
-                            <tr>
-                                <td><strong style="color: #28a745;">{{ gas.min_concentration }}</strong></td>
-                                <td>{{ gas.name_gas }} <span class="text-muted">({{ gas.name_units }})</span></td>
-                                <td>{{ gas.date_measurement }}</td>
-                                <td>{{ gas.name_municipality }}</td>
-                                <td>{{ gas.name_station }}</td>
-                                <td><span class="badge bg-success">{{ gas.name_type }}</span></td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            {% endif %}
-
-            <!-- Taula Concentració Mitjana -->
-            {% if info.avg_concentration_gas %}
-            <div class="table-card">
-                <h5 class="table-card-title">
-                    <i class="fas fa-equals"></i> Concentració Mitjana de Gasos
-                </h5>
-                <div class="table-responsive">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Contaminant</th>
-                                <th>Concentració Mitjana</th>
-                                {% if info.stations %}<th>Estació</th>{% endif %}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for gas in info.avg_concentration_gas %}
-                            <tr>
-                                <td>{{ gas.name_gas }} <span class="text-muted">({{ gas.name_units }})</span></td>
-                                <td><strong>{{ gas.avg_concentration }}</strong></td>
-                                {% if info.stations %}<td>{{ gas.name_station }}</td>{% endif %}
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            {% endif %}
-
-            <!-- Gràfics -->
-            <div id="charts-container"></div>
-            <div id="bar-chart-impact" class="chart-container"></div>
-            <div id="boxplot-container"></div>
-
-            <!-- Mapa -->
-            <div class="map-container">
-                <h5 class="map-title">
-                    <i class="fas fa-map-marker-alt"></i> Distribució de les Estacions
-                </h5>
-                <div id="map"></div>
-            </div>
-        </div>
-
-        {% endif %}
+<div class="results-header">
+    <div class="container-fluid">
+        <h2><i class="fas fa-chart-line"></i> Resultats de la Cerca</h2>
     </div>
+</div>
 
-    <!-- Scripts -->
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<div class="container-fluid">
+    {% if not info.has_data %}
+        <div class="alert alert-warning" role="alert">
+            <i class="fas fa-exclamation-triangle"></i>
+            <strong>Sense dades.</strong> No s'han trobat registres per als filtres seleccionats.
+        </div>
+    {% else %}
 
-    <!-- Original D3 Scripts (Boxplot, Map, Bar Chart, Time Series) -->
-    <script>
-    // ========== BOXPLOT ==========
-    (function() {
-        const rawData = {{ info.boxplot_data | safe }};
+        <!-- Taula Concentració Màxima -->
+        {% if info.maximum_concentration_gas %}
+        <div class="table-card">
+            <div class="table-card-header">
+                <i class="fas fa-arrow-up"></i> Concentració Màxima de Gasos
+            </div>
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Concentració</th>
+                        <th>Contaminant</th>
+                        <th>Data</th>
+                        <th>Municipi</th>
+                        <th>Estació</th>
+                        <th>Tipus</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for gas in info.maximum_concentration_gas %}
+                    <tr>
+                        <td><strong style="color: var(--aws-orange);">{{ gas.max_concentration }}</strong></td>
+                        <td>{{ gas.name_gas }} <span class="text-muted">({{ gas.name_units }})</span></td>
+                        <td>{{ gas.date_measurement }}</td>
+                        <td>{{ gas.name_municipality }}</td>
+                        <td>{{ gas.name_station }}</td>
+                        <td><span class="badge bg-info">{{ gas.name_type }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
 
-        if (rawData.length === 0) {
-            d3.select("#boxplot-container").append("p")
-                .text("No hi ha dades disponibles per als filtres seleccionats.")
-                .style("font-size", "16px")
-                .style("color", "#555")
-                .style("text-align", "center")
-                .style("margin-top", "50px");
-            return;
-        }
+        <!-- Taula Concentració Mínima -->
+        {% if info.minimum_concentration_gas %}
+        <div class="table-card">
+            <div class="table-card-header">
+                <i class="fas fa-arrow-down"></i> Concentració Mínima de Gasos
+            </div>
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Concentració</th>
+                        <th>Contaminant</th>
+                        <th>Data</th>
+                        <th>Municipi</th>
+                        <th>Estació</th>
+                        <th>Tipus</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for gas in info.minimum_concentration_gas %}
+                    <tr>
+                        <td><strong style="color: #28a745;">{{ gas.min_concentration }}</strong></td>
+                        <td>{{ gas.name_gas }} <span class="text-muted">({{ gas.name_units }})</span></td>
+                        <td>{{ gas.date_measurement }}</td>
+                        <td>{{ gas.name_municipality }}</td>
+                        <td>{{ gas.name_station }}</td>
+                        <td><span class="badge bg-success">{{ gas.name_type }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
 
-        rawData.forEach(d => {
-            d.valor = +d.concentration;
-        });
+        <!-- Taula Concentració Mitjana -->
+        {% if info.avg_concentration_gas %}
+        <div class="table-card">
+            <div class="table-card-header">
+                <i class="fas fa-equals"></i> Concentració Mitjana de Gasos
+            </div>
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Contaminant</th>
+                        <th>Concentració Mitjana</th>
+                        {% if info.stations %}<th>Estació</th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for gas in info.avg_concentration_gas %}
+                    <tr>
+                        <td>{{ gas.name_gas }} <span class="text-muted">({{ gas.name_units }})</span></td>
+                        <td><strong>{{ gas.avg_concentration }}</strong></td>
+                        {% if info.stations %}<td>{{ gas.name_station }}</td>{% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
 
-        d3.select("#boxplot-container").html("");
+        <!-- Gràfics -->
+        <div id="charts-container"></div>
+        <div id="bar-chart-impact"></div>
+        <div id="boxplot-container"></div>
 
-        const dataByUnit = d3.group(rawData, d => d.unitat);
-        const allContaminants = Array.from(new Set(rawData.map(d => d.contaminant)));
-        const color = d3.scaleOrdinal()
-            .domain(allContaminants)
-            .range(d3.schemeCategory10);
+        <!-- Mapa -->
+        <div class="chart-container">
+            <h5><i class="fas fa-map-marker-alt"></i> Distribució de les Estacions</h5>
+            <div id="map"></div>
+        </div>
 
-        const tooltip = d3.select("body").selectAll(".chart-tooltip").data([0]).join("div").attr("class", "chart-tooltip");
+        <!-- Export data to JS -->
+        <script>
+            window.boxplotData = {{ info.boxplot_data | safe }};
+            window.mapData = {{ info.map_data | safe }};
+            window.barChartData = {{ info.pollution_station_gas_info | safe }};
+            window.timeSeriesData = {{ info.pollution_gas_info_per_day | safe }};
+        </script>
 
-        dataByUnit.forEach((unitData, unitName) => {
-            const chartWrapper = d3.select("#boxplot-container")
-                .append("div")
-                .attr("class", "chart-container")
-                .style("margin-bottom", "20px");
-
-            const margin = {top: 50, right: 50, bottom: 50, left: 70},
-                width = 960 - margin.left - margin.right,
-                height = 350 - margin.top - margin.bottom;
-
-            const svg = chartWrapper.append("svg")
-                .attr("width", width + margin.left + margin.right)
-                .attr("height", height + margin.top + margin.bottom)
-            .append("g")
-                .attr("transform", `translate(${margin.left},${margin.top})`);
-
-            svg.append("text")
-                .attr("x", width / 2)
-                .attr("y", -20)
-                .attr("text-anchor", "middle")
-                .style("font-size", "18px")
-                .style("font-weight", "bold")
-                .text(`Distribució de Contaminants [ ${unitName} ]`);
-
-            const sumstat = Array.from(d3.group(unitData, d => d.contaminant), ([key, values]) => {
-                const sortedValues = values.map(g => g.valor).sort(d3.ascending);
-                const q1 = d3.quantile(sortedValues, .25);
-                const median = d3.quantile(sortedValues, .5);
-                const q3 = d3.quantile(sortedValues, .75);
-                const interQuantileRange = q3 - q1;
-                const min_whisker = Math.max(d3.min(sortedValues), q1 - 1.5 * interQuantileRange);
-                const max_whisker = Math.min(d3.max(sortedValues), q3 + 1.5 * interQuantileRange);
-                const outliers = values.filter(d => d.valor < min_whisker || d.valor > max_whisker);
-
-                return { key: key, q1: q1, median: median, q3: q3, iqr: interQuantileRange, min: min_whisker, max: max_whisker, outliers: outliers };
-            });
-
-            const x = d3.scaleBand()
-                .domain(sumstat.map(d => d.key))
-                .range([0, width])
-                .paddingInner(1)
-                .paddingOuter(.5);
-
-            svg.append("g")
-                .attr("transform", `translate(0,${height})`)
-                .call(d3.axisBottom(x))
-                .selectAll("text")
-                .style("font-size", "12px");
-
-            const y = d3.scaleLinear()
-                .domain([0, d3.max(unitData, d => d.valor) * 1.1]).nice()
-                .range([height, 0]);
-
-            svg.append("g").call(d3.axisLeft(y));
-
-            const boxWidth = 60;
-
-            svg.selectAll(".vertLines")
-            .data(sumstat)
-            .join("line")
-                .attr("x1", d => x(d.key))
-                .attr("x2", d => x(d.key))
-                .attr("y1", d => y(d.min))
-                .attr("y2", d => y(d.max))
-                .attr("stroke", "black")
-                .attr("stroke-width", 1);
-
-            svg.selectAll(".boxes")
-            .data(sumstat)
-            .join("rect")
-                .attr("x", d => x(d.key) - boxWidth/2)
-                .attr("y", d => y(d.q3))
-                .attr("height", d => y(d.q1) - y(d.q3))
-                .attr("width", boxWidth)
-                .attr("stroke", "black")
-                .attr("stroke-width", 2)
-                .style("fill", d => color(d.key))
-                .style("opacity", 0.8)
-                .on("mousemove", function(event, d) {
-                    d3.select(this).style("opacity", 1);
-                    tooltip.transition().duration(50).style("opacity", 1);
-                    tooltip.html(`<strong>${d.key}</strong><br/>Max: ${d.max.toFixed(2)}<br/>Q3: ${d.q3.toFixed(2)}<br/>Med: ${d.median.toFixed(2)}<br/>Q1: ${d.q1.toFixed(2)}<br/>Min: ${d.min.toFixed(2)}`)
-                    .style("left", (event.pageX + 15) + "px")
-                    .style("top", (event.pageY - 30) + "px");
-                })
-                .on("mouseout", function() {
-                    d3.select(this).style("opacity", 0.8);
-                    tooltip.transition().duration(200).style("opacity", 0);
-                });
-
-            svg.selectAll(".medianLines")
-            .data(sumstat)
-            .join("line")
-                .attr("x1", d => x(d.key) - boxWidth/2)
-                .attr("x2", d => x(d.key) + boxWidth/2)
-                .attr("y1", d => y(d.median))
-                .attr("y2", d => y(d.median))
-                .attr("stroke", "black")
-                .attr("stroke-width", 3);
-        });
-    })();
-    </script>
-
-    <script>
-    // ========== MAPA ==========
-    (function() {
-        const map = L.map('map').setView([41.75, 1.75], 8);
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 40,
-            attribution: '© OpenStreetMap'
-        }).addTo(map);
-
-        const estacions = {{ info.map_data | safe }};
-
-        estacions.forEach(estacio => {
-            const customIcon = L.divIcon({
-                html: `<svg width="28" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#FF9900" stroke="#ffffff" stroke-width="1.5"/><circle cx="12" cy="9" r="3.5" fill="#ffffff"/></svg>`,
-                className: 'custom-svg-marker',
-                iconSize: [28, 40],
-                iconAnchor: [14, 40],
-                popupAnchor: [0, -36]
-            });
-
-            const marker = L.marker([estacio.lat, estacio.lng], { icon: customIcon }).addTo(map);
-            marker.bindPopup(`<div style="min-width: 200px;"><strong>${estacio.nom}</strong><br/><small>${estacio.tipus}</small></div>`);
-        });
-    })();
-    </script>
-
-    <script>
-    // ========== GRÀFIC DE BARRES ==========
-    (function() {
-        const data = {{ info.pollution_station_gas_info | safe }};
-
-        if (data.length === 0) return;
-
-        const margin = {top: 50, right: 150, bottom: 50, left: 60},
-            width = 960 - margin.left - margin.right,
-            height = 400 - margin.top - margin.bottom;
-
-        const svg = d3.select("#bar-chart-impact")
-        .append("svg")
-            .attr("width", width + margin.left + margin.right)
-            .attr("height", height + margin.top + margin.bottom)
-        .append("g")
-            .attr("transform", `translate(${margin.left},${margin.top})`);
-
-        svg.append("text")
-            .attr("x", width / 2)
-            .attr("y", -20)
-            .attr("text-anchor", "middle")
-            .style("font-size", "18px")
-            .style("font-weight", "bold")
-            .text("Impacte de l'Entorn en la Contaminació");
-
-        const contaminants = Array.from(new Set(data.map(d => d.contaminant)));
-        const tipusEstacions = Array.from(new Set(data.map(d => d.tipus_estacio)));
-
-        const x0 = d3.scaleBand()
-            .domain(contaminants)
-            .rangeRound([0, width])
-            .paddingInner(0.1);
-
-        const x1 = d3.scaleBand()
-            .domain(tipusEstacions)
-            .rangeRound([0, x0.bandwidth()])
-            .padding(0.05);
-
-        const y = d3.scaleLinear()
-            .domain([0, d3.max(data, d => d.mitjana_concentracio)]).nice()
-            .rangeRound([height, 0]);
-
-        const color = d3.scaleOrdinal()
-            .domain(tipusEstacions)
-            .range(["#FF9900", "#377eb8", "#4daf4a"]);
-
-        svg.append("g")
-            .attr("transform", `translate(0,${height})`)
-            .call(d3.axisBottom(x0));
-
-        svg.append("g")
-            .call(d3.axisLeft(y));
-
-        const bars = svg.append("g")
-        .selectAll("g")
-        .data(d3.group(data, d => d.contaminant))
-        .join("g")
-            .attr("transform", d => `translate(${x0(d[0])},0)`)
-        .selectAll("rect")
-        .data(d => d[1])
-        .join("rect")
-            .attr("x", d => x1(d.tipus_estacio))
-            .attr("y", height)
-            .attr("width", x1.bandwidth())
-            .attr("height", 0)
-            .attr("fill", d => color(d.tipus_estacio))
-            .style("opacity", 1);
-
-        bars.transition()
-            .duration(800)
-            .delay((d, i) => i * 50)
-            .attr("y", d => y(d.mitjana_concentracio))
-            .attr("height", d => height - y(d.mitjana_concentracio));
-    })();
-    </script>
-
-    <script>
-    // ========== SÈRIE TEMPORAL ==========
-    (function() {
-        const rawData = {{ info.pollution_gas_info_per_day | safe }};
-
-        if (rawData.length === 0) return;
-
-        const parseTime = d3.timeParse("%Y-%m-%d %H:%M:%S");
-        rawData.forEach(d => {
-            d.date = parseTime(d.timestamp);
-            d.concentration = +d.concentration;
-        });
-
-        const dataByUnit = d3.group(rawData, d => d.unit);
-        const container = d3.select("#charts-container");
-
-        const margin = {top: 50, right: 150, bottom: 50, left: 60},
-            width = 960 - margin.left - margin.right,
-            height = 400 - margin.top - margin.bottom;
-
-        dataByUnit.forEach((unitData, unitName) => {
-            const chartDiv = container.append("div")
-                .attr("class", "chart-container");
-
-            const dataGrouped = d3.group(unitData, d => d.serie_key);
-
-            const svg = chartDiv.append("svg")
-                .attr("width", width + margin.left + margin.right)
-                .attr("height", height + margin.top + margin.bottom)
-            .append("g")
-                .attr("transform", `translate(${margin.left},${margin.top})`);
-
-            svg.append("text")
-                .attr("x", width / 2)
-                .attr("y", -20)
-                .attr("text-anchor", "middle")
-                .style("font-size", "18px")
-                .style("font-weight", "bold")
-                .text(`Evolució de Gasos (${unitName})`);
-
-            const x = d3.scaleTime()
-            .domain(d3.extent(unitData, d => d.date))
-            .range([0, width]);
-
-            svg.append("g")
-            .attr("transform", `translate(0,${height})`)
-            .call(d3.axisBottom(x).ticks(10));
-
-            const y = d3.scaleLinear()
-            .domain([0, d3.max(unitData, d => d.concentration) * 1.1])
-            .range([height, 0]);
-
-            svg.append("g")
-            .call(d3.axisLeft(y));
-
-            const color = d3.scaleOrdinal()
-            .domain(Array.from(dataGrouped.keys()))
-            .range(d3.schemeCategory10);
-
-            const lineGenerator = d3.line()
-            .x(d => x(d.date))
-            .y(d => y(d.concentration))
-            .defined(d => !isNaN(d.concentration));
-
-            svg.selectAll(".line-path")
-            .data(dataGrouped)
-            .enter()
-            .append("path")
-                .attr("class", "line-path")
-                .attr("fill", "none")
-                .attr("stroke", d => color(d[0]))
-                .attr("stroke-width", 2.5)
-                .attr("d", d => lineGenerator(d[1]));
-
-            const legendItems = svg.selectAll(".legend")
-            .data(dataGrouped)
-            .enter()
-            .append("g")
-                .attr("class", "legend")
-                .attr("transform", (d, i) => `translate(${width + 20}, ${i * 25})`);
-
-            legendItems.append("rect")
-            .attr("width", 15)
-            .attr("height", 15)
-            .attr("fill", d => color(d[0]));
-
-            legendItems.append("text")
-            .attr("x", 25)
-            .attr("y", 12)
-            .style("font-size", "12px")
-            .text(d => d[0]);
-        });
-    })();
-    </script>
-</body>
-</html>
+    {% endif %}
+</div>

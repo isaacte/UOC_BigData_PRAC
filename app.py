@@ -72,7 +72,7 @@ def get_db_connection():
 @app.route('/logs')
 def dashboard():
     """Estadístiques de les execucions"""
-    return render_template('dashboard.html')
+    return render_template('logs.html')
 
 
 @app.route('/api/health')

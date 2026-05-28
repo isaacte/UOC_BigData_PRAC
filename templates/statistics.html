@@ -9,100 +9,70 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
     <style>
         :root {
             --aws-orange: #FF9900;
             --aws-dark: #232F3E;
-            --text-dark: #232F3E;
-            --text-light: #666666;
-            --bg-light: #f8f9fa;
-            --border-color: #e0e0e0;
-        }
-
-        * {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         }
 
         body {
-            background: linear-gradient(135deg, #f5f5f5 0%, #ffffff 100%);
-            color: var(--text-dark);
-            overflow-x: hidden;
+            background: #f5f5f5;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
 
         .navbar-custom {
             background: linear-gradient(90deg, var(--aws-dark) 0%, #1a1a1a 100%);
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             padding: 1rem 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
 
         .navbar-brand {
             font-size: 1.5rem;
             font-weight: 700;
             color: var(--aws-orange) !important;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
         }
 
         .page-header {
             background: linear-gradient(135deg, var(--aws-dark) 0%, #1a1a1a 100%);
             color: white;
-            padding: 2rem 0;
+            padding: 2.5rem 0;
             margin-bottom: 2rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
         .page-header h1 {
-            font-weight: 700;
-            margin-bottom: 0.5rem;
             color: var(--aws-orange);
+            font-weight: 700;
         }
 
         .page-header p {
-            color: #ccc;
-            margin-bottom: 0;
+            color: #aaa;
+            margin: 0;
         }
 
         .filter-card {
             background: white;
-            border: 1px solid var(--border-color);
             border-radius: 8px;
-            padding: 1.5rem;
+            padding: 2rem;
             margin-bottom: 2rem;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-            transition: box-shadow 0.3s ease;
-        }
-
-        .filter-card:hover {
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
         .filter-card h5 {
             color: var(--aws-dark);
             font-weight: 600;
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .filter-card h5 i {
-            color: var(--aws-orange);
+            margin-bottom: 1.5rem;
         }
 
         .form-label {
-            font-weight: 600;
-            color: var(--text-dark);
-            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--aws-dark);
         }
 
-        .form-control, .form-select, .select2-container--default .select2-selection--multiple {
-            border: 1px solid var(--border-color);
+        .form-control, .form-select {
+            border: 1px solid #ddd;
             border-radius: 6px;
-            padding: 0.6rem 0.8rem;
-            font-size: 0.95rem;
-            transition: border-color 0.3s, box-shadow 0.3s;
         }
 
         .form-control:focus, .form-select:focus {
@@ -110,31 +80,83 @@
             box-shadow: 0 0 0 0.2rem rgba(255, 153, 0, 0.15);
         }
 
-        .select2-container--default .select2-selection--multiple {
-            min-height: 38px;
-            padding: 0.25rem;
-        }
-
-        .select2-selection__rendered {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.25rem;
-        }
-
-        .btn-primary-custom {
+        .btn-search {
             background: var(--aws-orange);
             border: none;
             color: white;
             font-weight: 600;
             padding: 0.7rem 2rem;
-            border-radius: 6px;
-            transition: all 0.3s ease;
         }
 
-        .btn-primary-custom:hover {
+        .btn-search:hover {
             background: #e68a00;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(255, 153, 0, 0.3);
+            color: white;
+        }
+
+        .results-header {
+            background: linear-gradient(135deg, var(--aws-dark) 0%, #1a1a1a 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+        }
+
+        .results-header h2 {
+            color: var(--aws-orange);
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .table-card {
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .table-card-header {
+            background: linear-gradient(90deg, var(--aws-dark) 0%, #1a1a1a 100%);
+            color: white;
+            padding: 1rem 1.5rem;
+            font-weight: 600;
+        }
+
+        .table-card-header i {
+            color: var(--aws-orange);
+            margin-right: 0.5rem;
+        }
+
+        .table {
+            margin-bottom: 0;
+        }
+
+        .table thead {
+            background: #f8f9fa;
+        }
+
+        .table thead th {
+            border-bottom: 2px solid #dee2e6;
+            font-weight: 600;
+            color: var(--aws-dark);
+        }
+
+        .table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        .alert-warning {
+            border: none;
+            background: #fff3cd;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+
+        .chart-container {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
         .loading-spinner {
@@ -148,35 +170,34 @@
             color: var(--aws-orange);
         }
 
-        .results-container {
-            margin-top: 2rem;
+        #map {
+            height: 500px;
+            border-radius: 8px;
+            margin-top: 1rem;
         }
 
-        .page-footer {
-            background: var(--aws-dark);
-            color: #ccc;
-            text-align: center;
-            padding: 1.5rem 0;
-            margin-top: 3rem;
-            border-top: 1px solid var(--border-color);
+        .chart-tooltip {
+            position: absolute;
+            padding: 10px 15px;
+            font-size: 12px;
+            background: rgba(35, 47, 62, 0.95);
+            color: white;
+            border-radius: 6px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1000;
+            border-left: 3px solid var(--aws-orange);
         }
 
-        .col-gap {
-            margin-bottom: 1rem;
+        .select2-container--default .select2-selection--multiple {
+            border: 1px solid #ddd;
+            border-radius: 6px;
         }
 
-        @media (max-width: 768px) {
-            .page-header {
-                padding: 1.5rem 0;
-            }
-
-            .page-header h1 {
-                font-size: 1.75rem;
-            }
-
-            .filter-card {
-                padding: 1rem;
-            }
+        .select2-container--default .select2-selection--multiple:focus {
+            border-color: var(--aws-orange);
         }
     </style>
 </head>
@@ -185,8 +206,7 @@
     <nav class="navbar-custom">
         <div class="container-fluid">
             <a class="navbar-brand" href="/">
-                <i class="fas fa-air"></i>
-                Qualitat de l'Aire
+                <i class="fas fa-wind"></i> Qualitat de l'Aire
             </a>
         </div>
     </nav>
@@ -204,18 +224,18 @@
         <!-- Filters Card -->
         <div class="filter-card">
             <h5><i class="fas fa-sliders-h"></i> Filtres de Cerca</h5>
-            <form name="filters" class="needs-validation">
+            <form name="filters">
                 <div class="row g-3">
                     <div class="col-12 col-md-4">
-                        <label for="datefilter" class="form-label">Rang de Dates</label>
-                        <input type="text" id="datefilter" name="datefilter" class="form-control" placeholder="Selecciona dates" required>
+                        <label class="form-label">Rang de Dates</label>
+                        <input type="text" name="datefilter" class="form-control" placeholder="Selecciona dates" required>
                         <input type="hidden" name="startdate" value="">
                         <input type="hidden" name="enddate" value="">
                     </div>
 
                     <div class="col-12 col-md-4">
-                        <label for="gas-select" class="form-label">Contaminant</label>
-                        <select id="gas-select" name="gas" class="form-select select2" multiple required>
+                        <label class="form-label">Contaminant</label>
+                        <select name="gas" class="form-select select2" multiple required>
                             {% for gas in pollution_gas %}
                                 <option value="{{ gas.id }}">{{ gas.name_gas }} ({{ gas.units }})</option>
                             {% endfor %}
@@ -223,8 +243,8 @@
                     </div>
 
                     <div class="col-12 col-md-4">
-                        <label for="station-select" class="form-label">Estació</label>
-                        <select id="station-select" name="station" class="form-select select2" multiple>
+                        <label class="form-label">Estació</label>
+                        <select name="station" class="form-select select2" multiple>
                             {% for station in stations %}
                                 <option value="{{ station.id }}">{{ station.name_station }}</option>
                             {% endfor %}
@@ -232,12 +252,12 @@
                     </div>
                 </div>
 
-                <div class="row g-3 mt-2">
+                <div class="row g-3 mt-3">
                     <div class="col-12 d-flex justify-content-end gap-2">
-                        <button type="button" class="btn btn-secondary" data-action="reset">
+                        <button type="button" class="btn btn-secondary" onclick="resetForm()">
                             <i class="fas fa-redo"></i> Netejar
                         </button>
-                        <button type="button" class="btn btn-primary-custom" data-action="submit">
+                        <button type="button" class="btn btn-search" onclick="submitSearch()">
                             <i class="fas fa-search"></i> Cercar
                         </button>
                     </div>
@@ -252,12 +272,7 @@
         </div>
 
         <!-- Results Container -->
-        <div class="results-container" id="results"></div>
-    </div>
-
-    <!-- Footer -->
-    <div class="page-footer">
-        <p>&copy; 2024 Sistema de Monitoratge de Qualitat de l'Aire. Tots els drets reservats.</p>
+        <div id="results"></div>
     </div>
 
     <!-- Scripts -->
@@ -266,23 +281,19 @@
     <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
         $(document).ready(function(){
-            init_date_range();
-            init_select2();
+            initDateRange();
+            initSelect2();
         });
 
-        function init_date_range() {
+        function initDateRange() {
             $('input[name="datefilter"]').daterangepicker({
                 autoUpdateInput: false,
-                locale: {
-                    cancelLabel: 'Netejar',
-                    applyLabel: 'Aplicar',
-                    monthNames: ['Gener', 'Febrer', 'Març', 'Abril', 'Maig', 'Juny',
-                                 'Juliol', 'Agost', 'Setembre', 'Octubre', 'Novembre', 'Desembre'],
-                    daysOfWeek: ['Dg', 'Dl', 'Dm', 'Dc', 'Dj', 'Dv', 'Ds']
-                }
+                locale: { cancelLabel: 'Netejar' }
             });
 
             $('input[name="datefilter"]').on('apply.daterangepicker', function(ev, picker) {
@@ -298,24 +309,21 @@
             });
         }
 
-        function init_select2() {
-            $('.select2').select2({
-                language: 'ca',
-                width: '100%'
-            });
+        function initSelect2() {
+            $('.select2').select2();
         }
 
-        $("body").on("click", "[data-action='submit']", function() {
+        function submitSearch() {
             const dateRange = $('[name="datefilter"]').val();
-            const gas = $('[name="gas"]').select2('data');
-            const station = $('[name="station"]').select2('data');
+            const gas = $('[name="gas"]').val();
+            const station = $('[name="station"]').val();
 
             if (!dateRange) {
                 alert("Cal seleccionar un rang de dates.");
                 return;
             }
 
-            if (gas.length === 0) {
+            if (!gas || gas.length === 0) {
                 alert("Cal seleccionar almenys un contaminant.");
                 return;
             }
@@ -326,8 +334,8 @@
             const filters = {
                 startDate: $("[name=startdate]").val(),
                 endDate: $("[name=enddate]").val(),
-                pollutionGas: gas.map(g => g.id),
-                stations: station.map(s => s.id)
+                pollutionGas: gas,
+                stations: station || []
             };
 
             $.ajax({
@@ -337,22 +345,203 @@
                 success: function(data) {
                     $('#loadingResults').hide();
                     $("#results").html(data);
+                    setTimeout(renderAllCharts, 100);
                 },
-                error: function(xhr, status, error) {
+                error: function() {
                     $('#loadingResults').hide();
                     $("#results").html('<div class="alert alert-danger">Error processant la consulta</div>');
                 }
             });
-        });
+        }
 
-        $("body").on("click", "[data-action='reset']", function() {
+        function resetForm() {
             $('[name="datefilter"]').val('');
             $('[name="startdate"]').val('');
             $('[name="enddate"]').val('');
             $('[name="gas"]').val(null).trigger('change');
             $('[name="station"]').val(null).trigger('change');
             $("#results").html("");
-        });
+        }
+
+        function renderAllCharts() {
+            renderBoxplot();
+            renderMap();
+            renderBarChart();
+            renderTimeSeries();
+        }
+
+        // ========== BOXPLOT ==========
+        function renderBoxplot() {
+            const rawData = window.boxplotData;
+            if (!rawData || rawData.length === 0) return;
+
+            rawData.forEach(d => d.valor = +d.concentration);
+            const dataByUnit = d3.group(rawData, d => d.unitat);
+            const allContaminants = Array.from(new Set(rawData.map(d => d.contaminant)));
+            const color = d3.scaleOrdinal().domain(allContaminants).range(d3.schemeCategory10);
+            const tooltip = d3.select("body").append("div").attr("class", "chart-tooltip");
+
+            dataByUnit.forEach((unitData, unitName) => {
+                const chartWrapper = d3.select("#boxplot-container")
+                    .append("div").attr("class", "chart-container");
+
+                const margin = {top: 50, right: 50, bottom: 50, left: 70},
+                    width = 960 - margin.left - margin.right,
+                    height = 350 - margin.top - margin.bottom;
+
+                const svg = chartWrapper.append("svg")
+                    .attr("width", width + margin.left + margin.right)
+                    .attr("height", height + margin.top + margin.bottom)
+                    .append("g")
+                    .attr("transform", `translate(${margin.left},${margin.top})`);
+
+                svg.append("text")
+                    .attr("x", width / 2).attr("y", -20).attr("text-anchor", "middle")
+                    .style("font-size", "18px").style("font-weight", "bold")
+                    .text(`Distribució de Contaminants [ ${unitName} ]`);
+
+                const sumstat = Array.from(d3.group(unitData, d => d.contaminant), ([key, values]) => {
+                    const sortedValues = values.map(g => g.valor).sort(d3.ascending);
+                    const q1 = d3.quantile(sortedValues, .25);
+                    const median = d3.quantile(sortedValues, .5);
+                    const q3 = d3.quantile(sortedValues, .75);
+                    const iqr = q3 - q1;
+                    const min = Math.max(d3.min(sortedValues), q1 - 1.5 * iqr);
+                    const max = Math.min(d3.max(sortedValues), q3 + 1.5 * iqr);
+                    const outliers = values.filter(d => d.valor < min || d.valor > max);
+                    return { key, q1, median, q3, iqr, min, max, outliers };
+                });
+
+                const x = d3.scaleBand().domain(sumstat.map(d => d.key))
+                    .range([0, width]).paddingInner(1).paddingOuter(.5);
+                svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x));
+
+                const y = d3.scaleLinear().domain([0, d3.max(unitData, d => d.valor) * 1.1]).nice()
+                    .range([height, 0]);
+                svg.append("g").call(d3.axisLeft(y));
+
+                const boxWidth = 60;
+                svg.selectAll(".boxes").data(sumstat).join("rect")
+                    .attr("x", d => x(d.key) - boxWidth/2).attr("y", d => y(d.q3))
+                    .attr("height", d => y(d.q1) - y(d.q3)).attr("width", boxWidth)
+                    .attr("stroke", "black").attr("stroke-width", 2)
+                    .style("fill", d => color(d.key)).style("opacity", 0.8);
+            });
+        }
+
+        // ========== MAP ==========
+        function renderMap() {
+            if (!document.getElementById('map')) return;
+            if (!window.mapData || window.mapData.length === 0) return;
+
+            const map = L.map('map').setView([41.75, 1.75], 8);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 40, attribution: '© OpenStreetMap'
+            }).addTo(map);
+
+            window.mapData.forEach(estacio => {
+                const customIcon = L.divIcon({
+                    html: `<svg width="28" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#FF9900" stroke="#ffffff" stroke-width="1.5"/><circle cx="12" cy="9" r="3.5" fill="#ffffff"/></svg>`,
+                    iconSize: [28, 40], iconAnchor: [14, 40], popupAnchor: [0, -36]
+                });
+                const marker = L.marker([estacio.lat, estacio.lng], { icon: customIcon }).addTo(map);
+                marker.bindPopup(`<div style="min-width: 200px;"><strong>${estacio.nom}</strong><br/><small>${estacio.tipus}</small></div>`);
+            });
+        }
+
+        // ========== BAR CHART ==========
+        function renderBarChart() {
+            if (!window.barChartData || window.barChartData.length === 0) return;
+
+            const margin = {top: 50, right: 150, bottom: 50, left: 60},
+                width = 960 - margin.left - margin.right,
+                height = 400 - margin.top - margin.bottom;
+
+            const svg = d3.select("#bar-chart-impact").append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+            svg.append("text").attr("x", width / 2).attr("y", -20).attr("text-anchor", "middle")
+                .style("font-size", "18px").style("font-weight", "bold")
+                .text("Impacte de l'Entorn en la Contaminació");
+
+            const contaminants = Array.from(new Set(window.barChartData.map(d => d.contaminant)));
+            const tipusEstacions = Array.from(new Set(window.barChartData.map(d => d.tipus_estacio)));
+
+            const x0 = d3.scaleBand().domain(contaminants).rangeRound([0, width]).paddingInner(0.1);
+            const x1 = d3.scaleBand().domain(tipusEstacions).rangeRound([0, x0.bandwidth()]).padding(0.05);
+            const y = d3.scaleLinear().domain([0, d3.max(window.barChartData, d => d.mitjana_concentracio)]).nice()
+                .rangeRound([height, 0]);
+            const color = d3.scaleOrdinal().domain(tipusEstacions).range(["#FF9900", "#377eb8", "#4daf4a"]);
+
+            svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x0));
+            svg.append("g").call(d3.axisLeft(y));
+
+            const bars = svg.append("g").selectAll("g").data(d3.group(window.barChartData, d => d.contaminant))
+                .join("g").attr("transform", d => `translate(${x0(d[0])},0)`)
+                .selectAll("rect").data(d => d[1]).join("rect")
+                .attr("x", d => x1(d.tipus_estacio)).attr("y", height).attr("width", x1.bandwidth())
+                .attr("height", 0).attr("fill", d => color(d.tipus_estacio)).style("opacity", 1);
+
+            bars.transition().duration(800).delay((d, i) => i * 50)
+                .attr("y", d => y(d.mitjana_concentracio))
+                .attr("height", d => height - y(d.mitjana_concentracio));
+        }
+
+        // ========== TIME SERIES ==========
+        function renderTimeSeries() {
+            if (!window.timeSeriesData || window.timeSeriesData.length === 0) return;
+
+            const parseTime = d3.timeParse("%Y-%m-%d %H:%M:%S");
+            window.timeSeriesData.forEach(d => {
+                d.date = parseTime(d.timestamp);
+                d.concentration = +d.concentration;
+            });
+
+            const dataByUnit = d3.group(window.timeSeriesData, d => d.unit);
+            const margin = {top: 50, right: 150, bottom: 50, left: 60},
+                width = 960 - margin.left - margin.right,
+                height = 400 - margin.top - margin.bottom;
+
+            dataByUnit.forEach((unitData, unitName) => {
+                const chartDiv = d3.select("#charts-container").append("div").attr("class", "chart-container");
+                const dataGrouped = d3.group(unitData, d => d.serie_key);
+
+                const svg = chartDiv.append("svg")
+                    .attr("width", width + margin.left + margin.right)
+                    .attr("height", height + margin.top + margin.bottom)
+                    .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+                svg.append("text").attr("x", width / 2).attr("y", -20).attr("text-anchor", "middle")
+                    .style("font-size", "18px").style("font-weight", "bold")
+                    .text(`Evolució de Gasos (${unitName})`);
+
+                const x = d3.scaleTime().domain(d3.extent(unitData, d => d.date))
+                    .range([0, width]);
+                svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x).ticks(10));
+
+                const y = d3.scaleLinear().domain([0, d3.max(unitData, d => d.concentration) * 1.1])
+                    .range([height, 0]);
+                svg.append("g").call(d3.axisLeft(y));
+
+                const color = d3.scaleOrdinal().domain(Array.from(dataGrouped.keys())).range(d3.schemeCategory10);
+                const lineGenerator = d3.line().x(d => x(d.date)).y(d => y(d.concentration))
+                    .defined(d => !isNaN(d.concentration));
+
+                svg.selectAll(".line-path").data(dataGrouped).enter().append("path")
+                    .attr("class", "line-path").attr("fill", "none")
+                    .attr("stroke", d => color(d[0])).attr("stroke-width", 2.5)
+                    .attr("d", d => lineGenerator(d[1]));
+
+                const legendItems = svg.selectAll(".legend").data(dataGrouped).enter().append("g")
+                    .attr("class", "legend").attr("transform", (d, i) => `translate(${width + 20}, ${i * 25})`);
+                legendItems.append("rect").attr("width", 15).attr("height", 15)
+                    .attr("fill", d => color(d[0]));
+                legendItems.append("text").attr("x", 25).attr("y", 12)
+                    .style("font-size", "12px").text(d => d[0]);
+            });
+        }
     </script>
 </body>
 </html>
