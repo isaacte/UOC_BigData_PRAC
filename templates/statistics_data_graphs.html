@@ -1,182 +1,339 @@
-<style>
-    .chart-tooltip {
-        position: absolute;
-        text-align: center;
-        padding: 10px;
-        font: 14px sans-serif;
-        background: rgba(33, 33, 33, 0.9);
-        color: white;
-        border-radius: 6px;
-        pointer-events: none; /* Evita que el tooltip interfereixi amb el ratolí */
-        opacity: 0;
-        transition: opacity 0.2s;
-        box-shadow: 0px 0px 10px rgba(0,0,0,0.5);
-        z-index: 1000;
-    }
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resultats de Cerca</title>
 
-    .bar-tooltip {
-        position: absolute;
-        text-align: center;
-        padding: 10px;
-        font: 14px sans-serif;
-        background: rgba(33, 33, 33, 0.9);
-        color: white;
-        border-radius: 6px;
-        pointer-events: none;
-        opacity: 0;
-        transition: opacity 0.2s;
-        box-shadow: 0px 0px 10px rgba(0,0,0,0.5);
-        z-index: 1000;
-    }
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
-    .leaflet-popup-content-wrapper {
-        background: #2b2b2b;
-        color: #fff;
-        border-radius: 8px;
-        padding: 5px;
-    }
-    .leaflet-popup-tip {
-        background: #2b2b2b;
-    }
-    .popup-btn {
-        display: inline-block;
-        margin-top: 8px;
-        padding: 5px 10px;
-        background: #4db8ff;
-        color: #000;
-        font-weight: bold;
-        text-decoration: none;
-        border-radius: 4px;
-        font-size: 11px;
-    }
-    .popup-btn:hover {
-        background: #359ad6;
-    }
-</style>
+    <style>
+        :root {
+            --aws-orange: #FF9900;
+            --aws-dark: #232F3E;
+            --text-dark: #232F3E;
+            --text-light: #666666;
+            --bg-light: #f8f9fa;
+            --border-color: #e0e0e0;
+        }
 
-<h2 class="text-center">Resultats de la cerca</h2>
-<div class="container">
-    {%if not info.has_data %}
-        <div class="alert alert-warning" role="alert">
-            No s'han trobat dades que coincideixin amb els filtres seleccionats. Prova a ampliar el rang de dates o a seleccionar altres gasos/estacions.
+        * {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        body {
+            background: #f5f5f5;
+            color: var(--text-dark);
+        }
+
+        .results-header {
+            background: white;
+            border-bottom: 2px solid var(--aws-orange);
+            padding: 1.5rem 0;
+            margin-bottom: 2rem;
+        }
+
+        .results-header h2 {
+            color: var(--aws-dark);
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .alert-warning {
+            border: none;
+            background: #fff3cd;
+            color: #856404;
+            border-radius: 6px;
+            padding: 1rem 1.5rem;
+        }
+
+        .table-card {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .table-card-title {
+            background: linear-gradient(90deg, var(--aws-dark) 0%, #1a1a1a 100%);
+            color: white;
+            padding: 1rem 1.5rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 0;
+        }
+
+        .table-card-title i {
+            color: var(--aws-orange);
+        }
+
+        .table {
+            margin-bottom: 0;
+            font-size: 0.95rem;
+        }
+
+        .table thead {
+            background: var(--bg-light);
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .table thead th {
+            color: var(--aws-dark);
+            font-weight: 600;
+            padding: 1rem;
+            border: none;
+        }
+
+        .table tbody tr {
+            transition: background-color 0.2s;
+        }
+
+        .table tbody tr:hover {
+            background: #f9f9f9;
+        }
+
+        .table tbody td {
+            padding: 0.8rem 1rem;
+            vertical-align: middle;
+            border-color: var(--border-color);
+        }
+
+        .chart-container {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .chart-tooltip {
+            position: absolute;
+            text-align: center;
+            padding: 10px 15px;
+            font-size: 12px;
+            background: rgba(35, 47, 62, 0.95);
+            color: white;
+            border-radius: 6px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            border-left: 3px solid var(--aws-orange);
+        }
+
+        #map {
+            height: 500px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .leaflet-popup-content-wrapper {
+            background: var(--aws-dark);
+            color: white;
+            border-radius: 8px;
+            padding: 8px;
+        }
+
+        .leaflet-popup-tip {
+            background: var(--aws-dark);
+        }
+
+        svg {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .map-container {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .map-title {
+            font-weight: 600;
+            color: var(--aws-dark);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .map-title i {
+            color: var(--aws-orange);
+        }
+
+        @media (max-width: 768px) {
+            .table {
+                font-size: 0.85rem;
+            }
+
+            .table-card-title {
+                padding: 0.8rem 1rem;
+            }
+
+            #map {
+                height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <!-- Results Header -->
+        <div class="results-header">
+            <div class="container-fluid">
+                <h2><i class="fas fa-chart-line"></i> Resultats de la Cerca</h2>
+            </div>
         </div>
-    {%else%}
-    
-        <div class="row">
-            <div>
-                {%if info.maximum_concentration_gas|length == 0 %}
-                    <div class="alert alert-warning" role="alert">
-                        No s'han trobat dades que coincideixin amb els filtres seleccionats. Prova a ampliar el rang de dates o a seleccionar altres gasos/estacions.
-                    </div>
-                {% else %}
-                    <b>Concentració màxima de gasos</b>
-                    <table class="table table-hover">
+
+        <!-- No Data Alert -->
+        {% if not info.has_data %}
+            <div class="container-fluid">
+                <div class="alert alert-warning" role="alert">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Sense dades.</strong> No s'han trobat registres que coincideixin amb els filtres seleccionats.
+                    Prova a ampliar el rang de dates o a seleccionar altres gasos/estacions.
+                </div>
+            </div>
+        {% else %}
+
+        <div class="container-fluid">
+            <!-- Taula Concentració Màxima -->
+            {% if info.maximum_concentration_gas %}
+            <div class="table-card">
+                <h5 class="table-card-title">
+                    <i class="fas fa-arrow-up"></i> Concentració Màxima de Gasos
+                </h5>
+                <div class="table-responsive">
+                    <table class="table">
                         <thead>
                             <tr>
                                 <th>Concentració</th>
                                 <th>Contaminant</th>
-                                <th>Data de mesura</th>
-                                <th>Població</th>
+                                <th>Data de Mesura</th>
+                                <th>Municipalitat</th>
                                 <th>Estació</th>
-                                <th>Tipus d'estació</th>
-                                <th>Àrea mesures</th>
+                                <th>Tipus d'Estació</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for gas in info.maximum_concentration_gas %}
                             <tr>
-                                <td>{{ gas.max_concentration }}</td>
-                                <td>{{ gas.name_gas }} ({{ gas.name_units }})</td>
+                                <td><strong style="color: var(--aws-orange);">{{ gas.max_concentration }}</strong></td>
+                                <td>{{ gas.name_gas }} <span class="text-muted">({{ gas.name_units }})</span></td>
                                 <td>{{ gas.date_measurement }}</td>
-                                <td>{{ gas.name_municipality }} ({{ gas.name_comarca }})</td>
+                                <td>{{ gas.name_municipality }}</td>
                                 <td>{{ gas.name_station }}</td>
-                                <td>{{ gas.name_type }}</td>
-                                <td>{{ gas.name_area }}</td>
+                                <td><span class="badge bg-info">{{ gas.name_type }}</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
-                {% endif %}
-                
+                </div>
             </div>
-            <div>
-                {%if info.minimum_concentration_gas|length == 0 %}
-                    <div class="alert alert-warning" role="alert">
-                        No s'han trobat dades que coincideixin amb els filtres seleccionats. Prova a ampliar el rang de dates o a seleccionar altres gasos/estacions.
-                    </div>
-                {% else %}
-                    <b>Concentració mínima de gasos</b>
-                    <table class="table table-hover">
+            {% endif %}
+
+            <!-- Taula Concentració Mínima -->
+            {% if info.minimum_concentration_gas %}
+            <div class="table-card">
+                <h5 class="table-card-title">
+                    <i class="fas fa-arrow-down"></i> Concentració Mínima de Gasos
+                </h5>
+                <div class="table-responsive">
+                    <table class="table">
                         <thead>
                             <tr>
                                 <th>Concentració</th>
                                 <th>Contaminant</th>
-                                <th>Data de mesura</th>
-                                <th>Població</th>
+                                <th>Data de Mesura</th>
+                                <th>Municipalitat</th>
                                 <th>Estació</th>
-                                <th>Tipus d'estació</th>
-                                <th>Àrea mesures</th>
+                                <th>Tipus d'Estació</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for gas in info.minimum_concentration_gas %}
                             <tr>
-                                <td>{{ gas.min_concentration }}</td>
-                                <td>{{ gas.name_gas }} ({{ gas.name_units }})</td>
+                                <td><strong style="color: #28a745;">{{ gas.min_concentration }}</strong></td>
+                                <td>{{ gas.name_gas }} <span class="text-muted">({{ gas.name_units }})</span></td>
                                 <td>{{ gas.date_measurement }}</td>
-                                <td>{{ gas.name_municipality }} ({{ gas.name_comarca }})</td>
+                                <td>{{ gas.name_municipality }}</td>
                                 <td>{{ gas.name_station }}</td>
-                                <td>{{ gas.name_type }}</td>
-                                <td>{{ gas.name_area }}</td>
+                                <td><span class="badge bg-success">{{ gas.name_type }}</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
-                {% endif %}
+                </div>
             </div>
-            <div>
-                {%if info.avg_concentration_gas|length == 0 %}
-                    <div class="alert alert-warning" role="alert">
-                        No s'han trobat dades que coincideixin amb els filtres seleccionats. Prova a ampliar el rang de dates o a seleccionar altres gasos/estacions.
-                    </div>
-                {% else %}
-                    <b>Concentració mitjana de gasos</b>
-                    <table class="table table-hover">
+            {% endif %}
+
+            <!-- Taula Concentració Mitjana -->
+            {% if info.avg_concentration_gas %}
+            <div class="table-card">
+                <h5 class="table-card-title">
+                    <i class="fas fa-equals"></i> Concentració Mitjana de Gasos
+                </h5>
+                <div class="table-responsive">
+                    <table class="table">
                         <thead>
                             <tr>
                                 <th>Contaminant</th>
-                                <th>Concentració</th>
-                                {% if info.stations %}
-                                    <th>Estació</th>
-                                {% endif %}
+                                <th>Concentració Mitjana</th>
+                                {% if info.stations %}<th>Estació</th>{% endif %}
                             </tr>
                         </thead>
                         <tbody>
                             {% for gas in info.avg_concentration_gas %}
                             <tr>
-                                <td>{{ gas.name_gas }} ({{ gas.name_units }})</td>
-                                <td>{{ gas.avg_concentration }}</td>
-                                {% if info.stations %}
-                                    <td>{{ gas.name_station }}</td>
-                                {% endif %}
+                                <td>{{ gas.name_gas }} <span class="text-muted">({{ gas.name_units }})</span></td>
+                                <td><strong>{{ gas.avg_concentration }}</strong></td>
+                                {% if info.stations %}<td>{{ gas.name_station }}</td>{% endif %}
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
-                {% endif %}
+                </div>
             </div>
+            {% endif %}
+
+            <!-- Gràfics -->
             <div id="charts-container"></div>
-            <div id="bar-chart-impact" style="position: relative;"></div>
+            <div id="bar-chart-impact" class="chart-container"></div>
             <div id="boxplot-container"></div>
+
+            <!-- Mapa -->
+            <div class="map-container">
+                <h5 class="map-title">
+                    <i class="fas fa-map-marker-alt"></i> Distribució de les Estacions
+                </h5>
+                <div id="map"></div>
+            </div>
         </div>
-    </div>
-    <div class="container">
-        <div id="map" style="height: 500px; width: 100%; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"></div>
+
+        {% endif %}
     </div>
 
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Original D3 Scripts (Boxplot, Map, Bar Chart, Time Series) -->
     <script>
+    // ========== BOXPLOT ==========
     (function() {
-        // Injectem les dades des del backend
         const rawData = {{ info.boxplot_data | safe }};
 
         if (rawData.length === 0) {
@@ -189,35 +346,25 @@
             return;
         }
 
-        // Convertim els valors a números
         rawData.forEach(d => {
-            d.valor = +d.concentration; 
+            d.valor = +d.concentration;
         });
 
-        // Netejem el contenidor abans de dibuixar (per si de cas)
         d3.select("#boxplot-container").html("");
 
-        // --- AGRUPACIÓ PER UNITAT DE MESURA ---
         const dataByUnit = d3.group(rawData, d => d.unitat);
-
-        // Color global consistent per a cada contaminant (independentment de la unitat)
         const allContaminants = Array.from(new Set(rawData.map(d => d.contaminant)));
         const color = d3.scaleOrdinal()
             .domain(allContaminants)
             .range(d3.schemeCategory10);
 
-        // Tooltip global únic per a la pantalla
         const tooltip = d3.select("body").selectAll(".chart-tooltip").data([0]).join("div").attr("class", "chart-tooltip");
 
-        // Dibuixem un Boxplot independent per a cada unitat trobada
         dataByUnit.forEach((unitData, unitName) => {
-            
-            // Contenidor individual per a aquest gràfic en concret per poder separar-los visualment
             const chartWrapper = d3.select("#boxplot-container")
                 .append("div")
-                .style("margin-bottom", "40px")
-                .style("border-bottom", "1px solid #eee")
-                .style("padding-bottom", "20px");
+                .attr("class", "chart-container")
+                .style("margin-bottom", "20px");
 
             const margin = {top: 50, right: 50, bottom: 50, left: 70},
                 width = 960 - margin.left - margin.right,
@@ -229,59 +376,47 @@
             .append("g")
                 .attr("transform", `translate(${margin.left},${margin.top})`);
 
-            // Títol dinàmic que especifica la Unitat de Mesura
             svg.append("text")
                 .attr("x", width / 2)
                 .attr("y", -20)
                 .attr("text-anchor", "middle")
                 .style("font-size", "18px")
-                .style("font-family", "sans-serif")
                 .style("font-weight", "bold")
-                .text(`Distribució de Contaminants en [ ${unitName} ]`);
+                .text(`Distribució de Contaminants [ ${unitName} ]`);
 
-            // Càlculs matemàtics del Boxplot restringits només a les dades d'aquesta unitat
             const sumstat = Array.from(d3.group(unitData, d => d.contaminant), ([key, values]) => {
                 const sortedValues = values.map(g => g.valor).sort(d3.ascending);
-                
                 const q1 = d3.quantile(sortedValues, .25);
                 const median = d3.quantile(sortedValues, .5);
                 const q3 = d3.quantile(sortedValues, .75);
                 const interQuantileRange = q3 - q1;
-                
                 const min_whisker = Math.max(d3.min(sortedValues), q1 - 1.5 * interQuantileRange);
                 const max_whisker = Math.min(d3.max(sortedValues), q3 + 1.5 * interQuantileRange);
                 const outliers = values.filter(d => d.valor < min_whisker || d.valor > max_whisker);
 
-                return {
-                    key: key, q1: q1, median: median, q3: q3,
-                    iqr: interQuantileRange, min: min_whisker, max: max_whisker, outliers: outliers
-                };
+                return { key: key, q1: q1, median: median, q3: q3, iqr: interQuantileRange, min: min_whisker, max: max_whisker, outliers: outliers };
             });
 
-            // Eix X exclusiu per als gasos d'aquesta unitat
             const x = d3.scaleBand()
                 .domain(sumstat.map(d => d.key))
                 .range([0, width])
                 .paddingInner(1)
                 .paddingOuter(.5);
-            
+
             svg.append("g")
                 .attr("transform", `translate(0,${height})`)
                 .call(d3.axisBottom(x))
                 .selectAll("text")
-                .style("font-size", "14px")
-                .style("font-weight", "bold");
+                .style("font-size", "12px");
 
-            // Eix Y calculat segons el màxim valor reals d'AQUESTA unitat
             const y = d3.scaleLinear()
                 .domain([0, d3.max(unitData, d => d.valor) * 1.1]).nice()
                 .range([height, 0]);
-                
+
             svg.append("g").call(d3.axisLeft(y));
 
             const boxWidth = 60;
 
-            // 3. Línies verticals dels bigotis
             svg.selectAll(".vertLines")
             .data(sumstat)
             .join("line")
@@ -292,7 +427,6 @@
                 .attr("stroke", "black")
                 .attr("stroke-width", 1);
 
-            // 4. Caixes principals
             svg.selectAll(".boxes")
             .data(sumstat)
             .join("rect")
@@ -307,14 +441,7 @@
                 .on("mousemove", function(event, d) {
                     d3.select(this).style("opacity", 1);
                     tooltip.transition().duration(50).style("opacity", 1);
-                    tooltip.html(`
-                        <strong>${d.key}</strong> (${unitName})<br/>
-                        Màxim: ${d.max.toFixed(2)}<br/>
-                        Q3: ${d.q3.toFixed(2)}<br/>
-                        Mediana: <strong style="color: #4db8ff">${d.median.toFixed(2)}</strong><br/>
-                        Q1: ${d.q1.toFixed(2)}<br/>
-                        Mínim: ${d.min.toFixed(2)}
-                    `)
+                    tooltip.html(`<strong>${d.key}</strong><br/>Max: ${d.max.toFixed(2)}<br/>Q3: ${d.q3.toFixed(2)}<br/>Med: ${d.median.toFixed(2)}<br/>Q1: ${d.q1.toFixed(2)}<br/>Min: ${d.min.toFixed(2)}`)
                     .style("left", (event.pageX + 15) + "px")
                     .style("top", (event.pageY - 30) + "px");
                 })
@@ -323,7 +450,6 @@
                     tooltip.transition().duration(200).style("opacity", 0);
                 });
 
-            // 5. Línia de la Mediana
             svg.selectAll(".medianLines")
             .data(sumstat)
             .join("line")
@@ -333,155 +459,43 @@
                 .attr("y2", d => y(d.median))
                 .attr("stroke", "black")
                 .attr("stroke-width", 3);
-
-            // 6. Outliers (pics d'aquesta unitat)
-            sumstat.forEach(stat => {
-                svg.selectAll(`.outliers-${stat.key}`)
-                .data(stat.outliers)
-                .join("circle")
-                    .attr("cx", x(stat.key))
-                    .attr("cy", d => y(d.valor))
-                    .attr("r", 4)
-                    .style("fill", color(stat.key))
-                    .style("stroke", "black")
-                    .style("opacity", 0.6)
-                    .style("cursor", "crosshair")
-                    .on("mousemove", function(event, d) {
-                        d3.select(this).attr("r", 7).style("opacity", 1);
-                        tooltip.transition().duration(50).style("opacity", 1);
-                        tooltip.html(`
-                            <strong style="color:red">PIC EXTREM</strong><br/>
-                            Data: ${d.timestamp}<br/>
-                            Valor: <strong>${d.valor} ${unitName}</strong>
-                        `)
-                        .style("left", (event.pageX + 15) + "px")
-                        .style("top", (event.pageY - 30) + "px");
-                    })
-                    .on("mouseout", function() {
-                        d3.select(this).attr("r", 4).style("opacity", 0.6);
-                        tooltip.transition().duration(200).style("opacity", 0);
-                    });
-            });
         });
-
     })();
     </script>
 
-
     <script>
+    // ========== MAPA ==========
     (function() {
-        // 1. Inicialitzar el mapa centrat a Catalunya
         const map = L.map('map').setView([41.75, 1.75], 8);
 
-        // 2. Afegir la capa de mapa estándar d'OpenStreetMap
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 40,
-            attribution: '© OpenStreetMap contributors'
+            attribution: '© OpenStreetMap'
         }).addTo(map);
 
-        // 3. Rebre les dades agrupades de Python
         const estacions = {{ info.map_data | safe }};
 
-        // 4. Afegir el Títol del Mapa dinàmicament
-        const mapTitle = L.control({ position: 'topright' });
-        mapTitle.onAdd = function() {
-            const div = L.DomUtil.create('div', 'map-title-container');
-            div.innerHTML = `
-                <div style="background: rgba(255, 255, 255, 0.95); padding: 8px 15px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); font-family: sans-serif;">
-                    <h3 style="margin: 0; color: #222; font-size: 15px; font-weight: bold;">Distribució de les estacions</h3>
-                </div>
-            `;
-            return div;
-        };
-        mapTitle.addTo(map);
-
-        // 5. Bucle per col·locar els marcadors neutrals (negres) al mapa
         estacions.forEach(estacio => {
-            
-            // Icona de tipus Pin clàssic pintada en color negre/gris fosc neutral
             const customIcon = L.divIcon({
-                html: `
-                    <svg width="28" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#2c3e50" stroke="#ffffff" stroke-width="1.5"/>
-                        <circle cx="12" cy="9" r="3.5" fill="#ffffff"/>
-                    </svg>
-                `,
-                className: 'custom-svg-marker', 
+                html: `<svg width="28" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#FF9900" stroke="#ffffff" stroke-width="1.5"/><circle cx="12" cy="9" r="3.5" fill="#ffffff"/></svg>`,
+                className: 'custom-svg-marker',
                 iconSize: [28, 40],
-                iconAnchor: [14, 40],           
-                popupAnchor: [0, -36]           
+                iconAnchor: [14, 40],
+                popupAnchor: [0, -36]
             });
 
-            // Creem el marcador al mapa
             const marker = L.marker([estacio.lat, estacio.lng], { icon: customIcon }).addTo(map);
-
-            // Contingut HTML de la bafarada (Popup)
-            const popupContent = `
-                <div style="font-family: sans-serif; min-width: 240px; color: #333;">
-                    <h4 style="margin: 0 0 4px 0; color: #1a73e8; font-size: 14px;">${estacio.nom}</h4>
-                    <p style="margin: 0 0 8px 0; font-size: 11px; color: #666;">
-                        Tipus: <strong>${estacio.tipus}</strong> | ${estacio.area}
-                    </p>
-                    <hr style="border: 0; border-top: 1px solid #e0e0e0; margin: 6px 0"/>
-                    
-                    <div style="margin: 8px 0; font-size: 12px; line-height: 1.4;">
-                        <strong style="display:block; margin-bottom: 6px; color: #555;">Últimes lectures:</strong>
-                        ${estacio.ultima_lectura}
-                    </div>
-                    
-                    <hr style="border: 0; border-top: 1px solid #e0e0e0; margin: 6px 0;"/>
-                    <p style="margin: 4px 0 0 0; font-size: 11px; color: #888; font-style: italic; text-align: right;">
-                        Actualitzat: ${estacio.data_actualitzacio}
-                    </p>
-                </div>
-            `;
-
-            marker.bindPopup(popupContent);
+            marker.bindPopup(`<div style="min-width: 200px;"><strong>${estacio.nom}</strong><br/><small>${estacio.tipus}</small></div>`);
         });
-
-        // 6. Afegir la llegenda de colors ICQA (Molt útil per a entendre els colors dels textos interiors)
-        const legend = L.control({ position: 'bottomright' });
-        legend.onAdd = function() {
-            const div = L.DomUtil.create('div', 'map-legend');
-            const estats = ["Bona", "Raonablement bona", "Regular", "Desfavorable", "Molt desfavorable", "Extremadament desfavorable"];
-            const colors = ["#3a9ad9", "#4daf4a", "#ffcc00", "#e41a1c", "#800000", "#7a297a"];
-            
-            let html = `
-                <div style="background: rgba(255, 255, 255, 0.95); padding: 10px 14px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); font-family: sans-serif; font-size: 11px; color: #333; line-height: 20px;">
-                    <strong style="font-size: 12px; display: block; margin-bottom: 5px; border-bottom: 1px solid #ddd; padding-bottom: 3px;">Índex ICQA</strong>
-            `;
-            
-            for (let i = 0; i < estats.length; i++) {
-                html += `
-                    <div style="display: flex; align-items: center; margin-bottom: 2px;">
-                        <i style="background: ${colors[i]}; width: 14px; height: 14px; display: inline-block; margin-right: 8px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.15);"></i>
-                        <span>${estats[i]}</span>
-                    </div>
-                `;
-            }
-            html += `</div>`;
-            div.innerHTML = html;
-            return div;
-        };
-        legend.addTo(map);
-
     })();
     </script>
 
-
     <script>
+    // ========== GRÀFIC DE BARRES ==========
     (function() {
         const data = {{ info.pollution_station_gas_info | safe }};
 
-        if (data.length === 0) {
-            d3.select("#bar-chart-impact").append("p")
-                .text("No hi ha dades disponibles per als filtres seleccionats.")
-                .style("font-size", "16px")
-                .style("color", "#555")
-                .style("text-align", "center")
-                .style("margin-top", "50px");
-            return;
-        }
+        if (data.length === 0) return;
 
         const margin = {top: 50, right: 150, bottom: 50, left: 60},
             width = 960 - margin.left - margin.right,
@@ -494,60 +508,42 @@
         .append("g")
             .attr("transform", `translate(${margin.left},${margin.top})`);
 
-        // Títol del gràfic
         svg.append("text")
             .attr("x", width / 2)
             .attr("y", -20)
             .attr("text-anchor", "middle")
-            .style("font-size", "20px")
-            .style("font-family", "sans-serif")
+            .style("font-size", "18px")
             .style("font-weight", "bold")
             .text("Impacte de l'Entorn en la Contaminació");
 
-        // Llistes de categories
         const contaminants = Array.from(new Set(data.map(d => d.contaminant)));
         const tipusEstacions = Array.from(new Set(data.map(d => d.tipus_estacio)));
 
-        // --- CONTROL D'ESTAT (Mode Solo) ---
-        // null significa que es mostren tots els tipus d'estació
-        let isolatedStation = null;
-
-        // Eix X (Grups de Gasos)
         const x0 = d3.scaleBand()
             .domain(contaminants)
             .rangeRound([0, width])
             .paddingInner(0.1);
 
-        // Eix X (Sub-grups de Tipus d'Estació dins de cada Gas)
         const x1 = d3.scaleBand()
             .domain(tipusEstacions)
             .rangeRound([0, x0.bandwidth()])
             .padding(0.05);
 
-        // Eix Y (Concentració)
         const y = d3.scaleLinear()
             .domain([0, d3.max(data, d => d.mitjana_concentracio)]).nice()
             .rangeRound([height, 0]);
 
-        // Colors per tipus d'estació
         const color = d3.scaleOrdinal()
             .domain(tipusEstacions)
-            .range(["#e41a1c", "#377eb8", "#4daf4a"]); 
+            .range(["#FF9900", "#377eb8", "#4daf4a"]);
 
-        // Dibuixar els Eixos
         svg.append("g")
             .attr("transform", `translate(0,${height})`)
             .call(d3.axisBottom(x0));
 
-        // Guardem la referència de l'eix Y per animar-lo després
-        const yAxisG = svg.append("g")
+        svg.append("g")
             .call(d3.axisLeft(y));
 
-        // Tooltip
-        const tooltip = d3.select("body").append("div")
-            .attr("class", "bar-tooltip");
-
-        // Dibuixar les Barres (Guardem la selecció a la variable 'bars')
         const bars = svg.append("g")
         .selectAll("g")
         .data(d3.group(data, d => d.contaminant))
@@ -556,150 +552,46 @@
         .selectAll("rect")
         .data(d => d[1])
         .join("rect")
-            .attr("class", "bar-rect")
             .attr("x", d => x1(d.tipus_estacio))
-            .attr("y", height) 
+            .attr("y", height)
             .attr("width", x1.bandwidth())
-            .attr("height", 0) 
+            .attr("height", 0)
             .attr("fill", d => color(d.tipus_estacio))
-            .style("cursor", "pointer")
-            .style("opacity", 1)
-            // Interactivitat Ratolí sobre les barres
-            .on("mousemove", function(event, d) {
-                if (isolatedStation && d.tipus_estacio !== isolatedStation) return;
+            .style("opacity", 1);
 
-                d3.select(this).style("opacity", 0.8);
-                tooltip.transition().duration(50).style("opacity", 1);
-                tooltip.html(`
-                    <strong>${d.tipus_estacio}</strong><br/>
-                    <span style="font-size: 12px; color: #ccc;">${d.contaminant}</span><br/>
-                    <strong style="color: #fff; font-size: 16px;">${d.mitjana_concentracio.toFixed(2)}</strong>
-                `)
-                .style("left", (event.pageX + 15) + "px")
-                .style("top", (event.pageY - 30) + "px");
-            })
-            .on("mouseout", function() {
-                // Restablim l'opacitat correcta segons si hi ha filtre o no
-                bars.style("opacity", d => (isolatedStation === null || d.tipus_estacio === isolatedStation) ? 1 : 0);
-                tooltip.transition().duration(200).style("opacity", 0);
-            });
-
-        // Animació de pujada inicial de les barres
         bars.transition()
             .duration(800)
-            .delay((d, i) => i * 100)
+            .delay((d, i) => i * 50)
             .attr("y", d => y(d.mitjana_concentracio))
             .attr("height", d => height - y(d.mitjana_concentracio));
-
-        // Dibuixar la Llegenda Interactiva
-        const legendItems = svg.append("g")
-            .attr("font-family", "sans-serif")
-            .attr("font-size", 12)
-            .attr("text-anchor", "start")
-        .selectAll("g")
-        .data(tipusEstacions)
-        .join("g")
-            .attr("transform", (d, i) => `translate(${width + 20},${i * 25})`)
-            .style("cursor", "pointer")
-            .style("transition", "opacity 0.2s")
-            .on("mouseover", function(event, legendStation) {
-                if (isolatedStation && isolatedStation !== legendStation) return;
-
-                // Efecte de focus al passar el ratolí per sobre de la llegenda
-                bars.style("opacity", d => {
-                    if (d.tipus_estacio === legendStation) return 1;
-                    return isolatedStation ? 0 : 0.2;
-                });
-            })
-            .on("mouseout", function() {
-                bars.style("opacity", d => (isolatedStation === null || d.tipus_estacio === isolatedStation) ? 1 : 0);
-            })
-            .on("click", function(event, clickedStation) {
-                // Lògica del Toggle Solo
-                if (isolatedStation === clickedStation) {
-                    isolatedStation = null;
-                    legendItems.style("opacity", 1); // Restablir opacitat de tota la llegenda
-                } else {
-                    isolatedStation = clickedStation;
-                    legendItems.style("opacity", d => d === clickedStation ? 1 : 0.3); // Difuminar la resta de llegendes
-                }
-
-                // 1. Recalcular el domini de l'eix Y basat en les dades que es queden actives
-                const activeData = isolatedStation 
-                    ? data.filter(d => d.tipus_estacio === isolatedStation)
-                    : data;
-                
-                const newMax = activeData.length > 0 ? d3.max(activeData, d => d.mitjana_concentracio) : 10;
-                y.domain([0, newMax]).nice();
-
-                // 2. Transició animada de l'eix Y
-                yAxisG.transition().duration(600).call(d3.axisLeft(y));
-
-                // 3. Transició de les barres (canvi de mida o desaparició)
-                bars.transition().duration(600)
-                    .attr("y", d => y(d.mitjana_concentracio))
-                    .attr("height", d => height - y(d.mitjana_concentracio))
-                    .style("opacity", d => (isolatedStation === null || d.tipus_estacio === isolatedStation) ? 1 : 0)
-                    .style("pointer-events", d => (isolatedStation === null || d.tipus_estacio === isolatedStation) ? "auto" : "none");
-            });
-
-        legendItems.append("rect")
-            .attr("x", 0)
-            .attr("width", 15)
-            .attr("height", 15)
-            .attr("fill", color);
-
-        legendItems.append("text")
-            .attr("x", 25)
-            .attr("y", 7.5)
-            .attr("dy", "0.32em")
-            .text(d => d);
-
     })();
     </script>
 
-
     <script>
+    // ========== SÈRIE TEMPORAL ==========
     (function() {
         const rawData = {{ info.pollution_gas_info_per_day | safe }};
 
-        if (rawData.length === 0) {
-            d3.select("#charts-container").append("p")
-                .text("No hi ha dades disponibles per als filtres seleccionats.")
-                .style("font-size", "16px")
-                .style("color", "#555")
-                .style("text-align", "center")
-                .style("margin-top", "50px");
-            return;
-        }
+        if (rawData.length === 0) return;
 
         const parseTime = d3.timeParse("%Y-%m-%d %H:%M:%S");
-
         rawData.forEach(d => {
             d.date = parseTime(d.timestamp);
-            d.concentration = +d.concentration; 
+            d.concentration = +d.concentration;
         });
 
-        // 1. AGRUPAR PER UNITAT (Ex: "µg/m3", "mg/m3")
         const dataByUnit = d3.group(rawData, d => d.unit);
-        
         const container = d3.select("#charts-container");
-
-        // Tooltip global únic per no duplicar memòria
-        const tooltip = d3.select("body").append("div")
-            .attr("class", "chart-tooltip");
 
         const margin = {top: 50, right: 150, bottom: 50, left: 60},
             width = 960 - margin.left - margin.right,
             height = 400 - margin.top - margin.bottom;
 
-        // 2. BUCLE PER CREAR N GRÀFICS
         dataByUnit.forEach((unitData, unitName) => {
-            
-            // Creem un div i un SVG per cada grup d'unitat
             const chartDiv = container.append("div")
-                .style("position", "relative")
-                .style("margin-bottom", "60px"); 
+                .attr("class", "chart-container");
+
+            const dataGrouped = d3.group(unitData, d => d.serie_key);
 
             const svg = chartDiv.append("svg")
                 .attr("width", width + margin.left + margin.right)
@@ -707,22 +599,13 @@
             .append("g")
                 .attr("transform", `translate(${margin.left},${margin.top})`);
 
-            // Títol dinàmic amb la unitat
             svg.append("text")
                 .attr("x", width / 2)
                 .attr("y", -20)
                 .attr("text-anchor", "middle")
                 .style("font-size", "18px")
-                .style("font-family", "sans-serif")
                 .style("font-weight", "bold")
                 .text(`Evolució de Gasos (${unitName})`);
-
-            // Sub-agrupar els gasos DINS d'aquest gràfic
-            const dataGrouped = d3.group(unitData, d => d.serie_key);
-
-            // --- CONTROL D'ESTAT (Mode Solo) ---
-            // null significa que es mostren tots els gasos. Si té un nom, només es mostra aquell gas.
-            let isolatedGas = null;
 
             const x = d3.scaleTime()
             .domain(d3.extent(unitData, d => d.date))
@@ -732,122 +615,38 @@
             .attr("transform", `translate(0,${height})`)
             .call(d3.axisBottom(x).ticks(10));
 
-            // Eix Y inicial
             const y = d3.scaleLinear()
-            .domain([0, d3.max(unitData, d => d.concentration) * 1.1]) 
+            .domain([0, d3.max(unitData, d => d.concentration) * 1.1])
             .range([height, 0]);
 
-            const yAxisG = svg.append("g")
+            svg.append("g")
             .call(d3.axisLeft(y));
 
             const color = d3.scaleOrdinal()
             .domain(Array.from(dataGrouped.keys()))
-            .range(d3.schemeCategory10); 
+            .range(d3.schemeCategory10);
 
             const lineGenerator = d3.line()
             .x(d => x(d.date))
             .y(d => y(d.concentration))
-            .defined(d => !isNaN(d.concentration)); 
+            .defined(d => !isNaN(d.concentration));
 
-            const bisectDate = d3.bisector(point => point.date).left;
-
-            // Dibuixar línies interactives
-            const paths = svg.selectAll(".line-path")
+            svg.selectAll(".line-path")
             .data(dataGrouped)
             .enter()
             .append("path")
                 .attr("class", "line-path")
                 .attr("fill", "none")
-                .attr("stroke", d => color(d[0])) 
+                .attr("stroke", d => color(d[0]))
                 .attr("stroke-width", 2.5)
-                .attr("d", d => lineGenerator(d[1]))
-                .style("cursor", "pointer")
-                .style("transition", "stroke-width 0.2s")
-                .on("mousemove", function(event, d) {
-                    const gasName = d[0];
-                    // Si hi ha un gas aïllat i no és aquest, ignorem el ratolí
-                    if (isolatedGas && isolatedGas !== gasName) return;
+                .attr("d", d => lineGenerator(d[1]));
 
-                    paths.style("opacity", pathData => {
-                        if (pathData[0] === gasName) return 1;
-                        return isolatedGas ? 0 : 0.1;
-                    }).attr("stroke-width", pathData => pathData[0] === gasName ? 4 : 2.5);
-                    
-                    const x0 = x.invert(d3.pointer(event)[0]);
-                    const i = bisectDate(d[1], x0, 1);
-                    const d0 = d[1][i - 1];
-                    const d1 = d[1][i];
-                    let point = d0;
-                    if (d1 && d0) { point = x0 - d0.date > d1.date - x0 ? d1 : d0; }
-                    
-                    tooltip.transition().duration(50).style("opacity", 1);
-                    tooltip.html(`
-                        <strong>${d[0]}</strong><br/>
-                        <span style="font-size: 11px; color: #ccc;">${point.timestamp}</span><br/>
-                        <strong style="color: #4db8ff; font-size: 16px;">${point.concentration}</strong>
-                    `)
-                    .style("left", (event.pageX + 15) + "px")
-                    .style("top", (event.pageY - 30) + "px");
-                })
-                .on("mouseout", function() {
-                    // Restablim opacitat segons si hi ha filtre actiu o no
-                    paths.style("opacity", pathData => (isolatedGas === null || pathData[0] === isolatedGas) ? 1 : 0)
-                        .attr("stroke-width", 2.5);
-                    tooltip.transition().duration(200).style("opacity", 0);
-                });
-
-            // Dibuixar Llegenda interactiva amb comportament SOLO
             const legendItems = svg.selectAll(".legend")
             .data(dataGrouped)
             .enter()
             .append("g")
                 .attr("class", "legend")
-                .attr("transform", (d, i) => `translate(${width + 20}, ${i * 25})`)
-                .style("cursor", "pointer")
-                .style("transition", "opacity 0.2s")
-                .on("mouseover", function(event, legendData) {
-                    const gasName = legendData[0];
-                    if (isolatedGas && isolatedGas !== gasName) return;
-
-                    paths.style("opacity", pathData => {
-                        if (pathData[0] === gasName) return 1;
-                        return isolatedGas ? 0 : 0.1;
-                    }).attr("stroke-width", pathData => pathData[0] === gasName ? 4 : 2.5);
-                })
-                .on("mouseout", function() {
-                    paths.style("opacity", pathData => (isolatedGas === null || pathData[0] === isolatedGas) ? 1 : 0)
-                        .attr("stroke-width", 2.5);
-                })
-                .on("click", function(event, legendData) {
-                    const gasName = legendData[0];
-
-                    if (isolatedGas === gasName) {
-                        // Si tornem a clicar el que ja estava filtrat, desfem el filtre (mostrem tot)
-                        isolatedGas = null;
-                        legendItems.style("opacity", 1); // Totes les llegendes brillants
-                    } else {
-                        // Si cliquem un de nou, l'aïllem
-                        isolatedGas = gasName;
-                        legendItems.style("opacity", d => d[0] === gasName ? 1 : 0.3); // Apaguem les altres llegendes
-                    }
-
-                    // 1. Recalcular el domini de l'eix Y basat en el filtre actiu
-                    const activeData = isolatedGas 
-                        ? unitData.filter(d => d.serie_key === isolatedGas)
-                        : unitData;
-                    
-                    const newMax = activeData.length > 0 ? d3.max(activeData, d => d.concentration) : 10;
-                    y.domain([0, newMax * 1.1]).nice();
-
-                    // 2. Transició animada de l'eix Y
-                    yAxisG.transition().duration(600).call(d3.axisLeft(y));
-
-                    // 3. Transició de les línies (les apagades van a opacitat 0)
-                    paths.transition().duration(600)
-                        .attr("d", d => lineGenerator(d[1]))
-                        .style("opacity", d => (isolatedGas === null || d[0] === isolatedGas) ? 1 : 0)
-                        .style("pointer-events", d => (isolatedGas === null || d[0] === isolatedGas) ? "auto" : "none");
-                });
+                .attr("transform", (d, i) => `translate(${width + 20}, ${i * 25})`);
 
             legendItems.append("rect")
             .attr("width", 15)
@@ -857,10 +656,10 @@
             legendItems.append("text")
             .attr("x", 25)
             .attr("y", 12)
-            .style("font-family", "sans-serif")
             .style("font-size", "12px")
             .text(d => d[0]);
         });
     })();
     </script>
-    {%endif%}
+</body>
+</html>

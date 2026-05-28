@@ -69,9 +69,9 @@ def get_db_connection():
 
 # ========== RUTES ==========
 
-@app.route('/')
+@app.route('/logs')
 def dashboard():
-    """Pàgina principal del panell de control"""
+    """Estadístiques de les execucions"""
     return render_template('dashboard.html')
 
 
@@ -368,7 +368,7 @@ def download_log(execution_id):
         return jsonify({'error': f'Error descargant: {str(e)}'}), 500
 
 
-@app.route('/statistics')
+@app.route('/')
 def statistics():
     conn = get_db_connection()
     cursor = conn.cursor()
