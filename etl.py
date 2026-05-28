@@ -9,11 +9,10 @@ import json
 import uuid
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 
-# Cadenat global per evitar que els fils col·lideixin en crear estacions/municipis nous
 metadata_lock = threading.Lock()
 
-# Diccionaris globals compartits en memòria per tots els fils
 available_units = {}
 available_gas = {}
 available_station_types = {}
@@ -23,13 +22,10 @@ available_municipalities = {}
 available_stations = {}
 
 
-# --- 0. LOGGING (S3 + RDS) ---
 class ETLLogger:
-    """Logger que guarda logs detallats en S3 i resums en RDS"""
-
     def __init__(self, db_params, s3_bucket_logs, s3_prefix='etl-logs'):
         self.db_params = db_params
-        self.s3_bucket_logs = s3_bucket_logs  # Bucket dedicado para logs
+        self.s3_bucket_logs = s3_bucket_logs
         self.s3_prefix = s3_prefix
         self.s3_client = boto3.client('s3', region_name='us-east-1')
         self.events = []
@@ -44,7 +40,6 @@ class ETLLogger:
         )
 
     def add_event(self, event_type, level='info', message='', data=None):
-        """Añadir evento al log"""
         self.events.append({
             'timestamp': datetime.now().isoformat(),
             'event_type': event_type,
@@ -54,7 +49,6 @@ class ETLLogger:
         })
 
     def log_batch_start(self, execution_id, process_date):
-        """Registrar inicio en RDS"""
         conn = self.get_db_connection()
         try:
             with conn.cursor() as cursor:
@@ -68,7 +62,6 @@ class ETLLogger:
             conn.close()
 
     def log_batch_success(self, execution_id, process_date, total_records, duration_seconds, s3_log_path):
-        """Registrar éxito en RDS"""
         conn = self.get_db_connection()
         try:
             with conn.cursor() as cursor:
@@ -86,7 +79,6 @@ class ETLLogger:
             conn.close()
 
     def log_batch_error(self, execution_id, error_message, error_type='unknown', s3_log_path=None):
-        """Registrar error en RDS"""
         conn = self.get_db_connection()
         try:
             with conn.cursor() as cursor:
@@ -104,13 +96,12 @@ class ETLLogger:
             conn.close()
 
     def save_to_s3(self, execution_id, process_date):
-        """Guardar log detallado en S3 (bucket dedicado para logs)"""
         timestamp = datetime.now().isoformat()
         s3_key = f"{self.s3_prefix}/{process_date}/{execution_id}/{timestamp}.json"
 
         try:
             self.s3_client.put_object(
-                Bucket=self.s3_bucket_logs,  # Usar bucket de logs dedicado
+                Bucket=self.s3_bucket_logs,
                 Key=s3_key,
                 Body=json.dumps({
                     'collected_at': datetime.now().isoformat(),
@@ -121,11 +112,10 @@ class ETLLogger:
             )
             return f"s3://{self.s3_bucket_logs}/{s3_key}"
         except Exception as e:
-            print(f"Error guardando log en S3: {e}")
+            print(f"Error guardant log a S3: {e}")
             return None
 
 
-# --- 1. CONFIGURACIÓ I CREDENCIALS ---
 def get_ssm_parameters():
     print("Recuperant paràmetres d'AWS Systems Manager...")
     ssm = boto3.client('ssm', region_name='us-east-1')
@@ -161,10 +151,9 @@ def get_db_connection(params):
     )
 
 
-# --- 2. INICIALITZACIÓ DE DICCIONARIS (S'executa un sol cop a l'inici) ---
 def init_shared_dictionaries(params):
     global available_units, available_gas, available_station_types, available_urban_areas, available_comarques, available_municipalities, available_stations
-    print("Carregant catàlegs actuals de la base de dades a memòria...")
+    print("Carregant catàlegs de la base de dades a memòria...")
     conn = get_db_connection(params)
     with conn.cursor() as cursor:
         cursor.execute("SELECT id, name_units FROM unit")
@@ -190,7 +179,6 @@ def init_shared_dictionaries(params):
     conn.close()
 
 
-# --- 3. GESTIÓ DINÀMICA DE METADADES (Thread-Safe amb Lock) ---
 def sync_missing_metadata(df, params):
     global available_units, available_gas, available_station_types, available_urban_areas, available_comarques, available_municipalities, available_stations
 
@@ -264,200 +252,115 @@ def sync_missing_metadata(df, params):
         conn.close()
 
 
-# ✅ FUNCIÓ PER ESPERAR ATHENA (Threading puro - NO bloqueja ThreadPoolExecutor)
-def wait_athena_query_threaded(athena, query_id, max_wait=3600):
-    """
-    Esperar Athena query SIN BLOQUEAR el thread principal del ThreadPoolExecutor
-
-    - Crea UN thread separado para polling
-    - El thread principal puede hacer otras cosas
-    - Usa queue.Queue para comunicación thread-safe
-    - Exponential backoff: 1s → 2s → 4s → 8s → ... → 60s
-    """
-    result_queue = queue.Queue()
-
-    def _wait_in_background():
-        """Esta función corre en UN THREAD SEPARADO (daemon)"""
-        wait_time = 1
-        elapsed = 0
-
-        try:
-            while elapsed < max_wait:
-                resp = athena.get_query_execution(QueryExecutionId=query_id)
-                status = resp['QueryExecution']['Status']['State']
-
-                if status == 'SUCCEEDED':
-                    result_queue.put(('success', resp))
-                    return
-
-                elif status in ['FAILED', 'CANCELLED']:
-                    reason = resp['QueryExecution']['Status'].get('StateChangeReason', 'Unknown')
-                    result_queue.put(('error', f"Query {status}: {reason}"))
-                    return
-
-                # time.sleep() aquí está en thread separado
-                # NO bloquea el thread principal del ThreadPoolExecutor!
-                print(f"⏳ Esperant {wait_time}s...")
-                time.sleep(wait_time)
-
-                elapsed += wait_time
-                wait_time = min(wait_time * 2, 60)  # Exponential backoff
-
-            result_queue.put(('timeout', f'Timeout después de {max_wait}s'))
-
-        except Exception as e:
-            result_queue.put(('exception', str(e)))
-
-    # Iniciar thread separado (daemon=True)
-    # Corre en background sin bloquear el thread principal
-    thread = threading.Thread(target=_wait_in_background, daemon=True)
-    thread.start()
-
-    # Esperar resultado (sin bloquear el thread principal)
-    # result_queue.get() retorna cuando el thread background puts algo
-    try:
-        status_type, result = result_queue.get(timeout=max_wait)
-
-        if status_type == 'success':
-            print(f"✅ Query completada (sin bloquear)")
-            return result
-
-        elif status_type == 'error':
-            raise Exception(result)
-
-        elif status_type == 'timeout':
-            raise TimeoutError(result)
-
-        else:  # exception
-            raise Exception(result)
-
-    except queue.Empty:
-        raise TimeoutError(f"Queue timeout después de {max_wait}s")
+@dataclass
+class AthenaQueryTask:
+    process_date: str
+    query_id: str
+    execution_id: str
+    logger: ETLLogger
+    start_time: float
+    query_string: str
 
 
-# --- 4. PROCÉS DIARI DIRECTE AMB ATHENA ---
-def process_single_day(process_date, params):
-    fecha_str = process_date.strftime('%Y-%m-%d')
-    execution_id = str(uuid.uuid4())
-    start_time = time.time()
+class AthenaQueryOrchestrator:
+    def __init__(self, athena_client, max_wait=3600):
+        self.athena = athena_client
+        self.max_wait = max_wait
+        self.queries = {}
+        self.results_queue = queue.Queue()
+        self.lock = threading.Lock()
 
-    # Inicializar logger con bucket dedicado para logs
-    logger = ETLLogger(params, params['BUCKET_LOGS'])
-    logger.add_event('batch_start', 'info', 'Batch iniciado')
+    def submit_query(self, task: AthenaQueryTask):
+        with self.lock:
+            self.queries[task.query_id] = task
+            print(f"[SUBMIT] Query {task.query_id[:8]}... per a {task.process_date} iniciada")
 
-    print(f"[{fecha_str}] Iniciant enviament a Athena... (ID: {execution_id[:8]}...)")
-
-    # Log de inicio en RDS
-    try:
-        logger.log_batch_start(execution_id, fecha_str)
-    except Exception as e:
-        print(f"[{fecha_str}] Avís: No s'ha pogut registrar inici: {e}")
-        logger.add_event('batch_start_error', 'error', str(e))
-
-    athena = boto3.client('athena', region_name='us-east-1')
-    s3_path_output = f"s3://{params['BUCKET_PROCESSED']}/athena-results/"
-
-    athena_db = params['ATHENEA_DB']
-
-    query = f"""
-        WITH cleaned_lines AS (
-            SELECT 
-                linea_text,
-                CASE
-                    WHEN linea_text = '[]' THEN NULL
-                    WHEN linea_text LIKE '[%' THEN 
-                        substr(trim(linea_text), 2, length(trim(linea_text)) - 2)
-                    WHEN linea_text LIKE ',%' THEN 
-                        substr(trim(linea_text), 2)
-                    ELSE trim(linea_text)
-                END AS json_candidate
-            FROM {athena_db}.air_quality_raw_text
-            WHERE linea_text IS NOT NULL AND trim(linea_text) != '[]'
-        ),
-        validated_json AS (
-            SELECT 
-                json_candidate,
-                TRY(json_parse(json_candidate)) AS registre
-            FROM cleaned_lines
-            WHERE json_candidate IS NOT NULL
-        ),
-        parsed_data AS (
-            SELECT registre
-            FROM validated_json
-            WHERE registre IS NOT NULL
+    def poll_all(self):
+        thread = threading.Thread(
+            target=self._polling_background,
+            daemon=True
         )
-        SELECT 
-            json_extract_scalar(registre, '$.codi_eoi') AS codi_eoi,
-            json_extract_scalar(registre, '$.nom_estacio') AS nom_estacio,
-            json_extract_scalar(registre, '$.data') AS data_raw,
-            TRY(CAST(SUBSTRING(json_extract_scalar(registre, '$.data'), 1, 10) AS DATE)) AS data_parsed,
-            json_extract_scalar(registre, '$.magnitud') AS magnitud,
-            json_extract_scalar(registre, '$.contaminant') AS contaminant,
-            json_extract_scalar(registre, '$.unitats') AS unitats,
-            json_extract_scalar(registre, '$.tipus_estacio') AS tipus_estacio,
-            json_extract_scalar(registre, '$.area_urbana') AS area_urbana,
-            json_extract_scalar(registre, '$.codi_ine') AS codi_ine,
-            json_extract_scalar(registre, '$.municipi') AS municipi,
-            json_extract_scalar(registre, '$.codi_comarca') AS codi_comarca,
-            json_extract_scalar(registre, '$.nom_comarca') AS nom_comarca,
-            json_extract_scalar(registre, '$.altitud') AS altitud,
-            json_extract_scalar(registre, '$.latitud') AS latitud,
-            json_extract_scalar(registre, '$.longitud') AS longitud,
-            json_extract_scalar(registre, '$.h01') AS h01, json_extract_scalar(registre, '$.h02') AS h02,
-            json_extract_scalar(registre, '$.h03') AS h03, json_extract_scalar(registre, '$.h04') AS h04,
-            json_extract_scalar(registre, '$.h05') AS h05, json_extract_scalar(registre, '$.h06') AS h06,
-            json_extract_scalar(registre, '$.h07') AS h07, json_extract_scalar(registre, '$.h08') AS h08,
-            json_extract_scalar(registre, '$.h09') AS h09, json_extract_scalar(registre, '$.h10') AS h10,
-            json_extract_scalar(registre, '$.h11') AS h11, json_extract_scalar(registre, '$.h12') AS h12,
-            json_extract_scalar(registre, '$.h13') AS h13, json_extract_scalar(registre, '$.h14') AS h14,
-            json_extract_scalar(registre, '$.h15') AS h15, json_extract_scalar(registre, '$.h16') AS h16,
-            json_extract_scalar(registre, '$.h17') AS h17, json_extract_scalar(registre, '$.h18') AS h18,
-            json_extract_scalar(registre, '$.h19') AS h19, json_extract_scalar(registre, '$.h20') AS h20,
-            json_extract_scalar(registre, '$.h21') AS h21, json_extract_scalar(registre, '$.h22') AS h22,
-            json_extract_scalar(registre, '$.h23') AS h23, json_extract_scalar(registre, '$.h24') AS h24
-        FROM parsed_data
-        WHERE TRY(CAST(SUBSTRING(json_extract_scalar(registre, '$.data'), 1, 10) AS DATE)) = DATE '{fecha_str}'
-    """
+        thread.start()
+        print(f"[CONSULTA] Iniciada consulta de {len(self.queries)} queries")
+
+    def _polling_background(self):
+        completed = set()
+        elapsed = 0
+        wait_time = 1
+
+        while len(completed) < len(self.queries) and elapsed < self.max_wait:
+            with self.lock:
+                for query_id, task in list(self.queries.items()):
+                    if query_id in completed:
+                        continue
+
+                    try:
+                        resp = self.athena.get_query_execution(QueryExecutionId=query_id)
+                        status = resp['QueryExecution']['Status']['State']
+
+                        if status == 'SUCCEEDED':
+                            self.results_queue.put((task, resp))
+                            completed.add(query_id)
+                            print(f"[COMPLETADA] Query {query_id[:8]}... finalitzada en {elapsed}s")
+
+                        elif status in ['FAILED', 'CANCELLED']:
+                            error = resp['QueryExecution']['Status'].get('StateChangeReason')
+                            self.results_queue.put((task, Exception(f"Query {status}: {error}")))
+                            completed.add(query_id)
+                            print(f"[FALLIDA] Query {query_id[:8]}... {status}")
+
+                    except Exception as e:
+                        self.results_queue.put((task, e))
+                        completed.add(query_id)
+                        print(f"[ERROR] Query {query_id[:8]}... error: {e}")
+
+            print(f"⏳ Esperant {wait_time}s... ({len(completed)}/{len(self.queries)} completades)")
+            time.sleep(wait_time)
+
+            elapsed += wait_time
+            wait_time = min(wait_time * 2, 10)
+
+    def get_result(self, timeout=None):
+        try:
+            task, result = self.results_queue.get(timeout=timeout)
+
+            if isinstance(result, Exception):
+                raise result
+
+            return task, result
+
+        except queue.Empty:
+            return None, None
+
+
+def process_task(task: AthenaQueryTask, result, params):
+    process_date = task.process_date
+    execution_id = task.execution_id
+    logger = task.logger
+    start_time = task.start_time
 
     try:
-        print(f"[{fecha_str}] Executant consulta Athena...")
-        logger.add_event('athena_query_start', 'info', 'Consulta Athena iniciada')
-
-        response = athena.start_query_execution(QueryString=query,
-                                                ResultConfiguration={'OutputLocation': s3_path_output})
-        q_id = response['QueryExecutionId']
-
-        # ✅ CORRECTE: Threading puro (NO bloqueja ThreadPoolExecutor)
-        status_resp = wait_athena_query_threaded(athena, q_id)
-
-        if status_resp['QueryExecution']['Status']['State'] != 'SUCCEEDED':
-            error_msg = status_resp['QueryExecution']['Status'].get('StateChangeReason', 'Unknown error')
-            raise Exception(f"Athena error: {error_msg}")
-
-        csv_uri = status_resp['QueryExecution']['ResultConfiguration']['OutputLocation']
-        print(f"[{fecha_str}] Resultats a: {csv_uri}")
-        logger.add_event('athena_query_success', 'info', 'Consulta completada', {'csv_uri': csv_uri})
+        csv_uri = result['QueryExecution']['ResultConfiguration']['OutputLocation']
+        print(f"[{process_date}] Resultats a: {csv_uri[:60]}...")
+        logger.add_event('athena_query_success', 'info', 'Consulta completada')
 
         df = pd.read_csv(csv_uri)
 
         if df.empty:
-            print(f"[{fecha_str}] Sense dades per processar.")
-            logger.add_event('no_data', 'info', 'No hay datos para procesar')
+            print(f"[{process_date}] Sense dades per processar.")
+            logger.add_event('no_data', 'info', 'Sense dades per processar')
 
-            # Guardar log en S3 (bucket dedicado)
-            s3_log_path = logger.save_to_s3(execution_id, fecha_str)
+            s3_log_path = logger.save_to_s3(execution_id, process_date)
+            logger.log_batch_success(execution_id, process_date, 0, time.time() - start_time, s3_log_path)
+            return True
 
-            # Actualizar RDS
-            logger.log_batch_success(execution_id, fecha_str, 0, time.time() - start_time, s3_log_path)
-            return fecha_str, True
-
-        print(f"[{fecha_str}] Registres obtinguts: {len(df)}")
+        print(f"[{process_date}] Registres obtinguts: {len(df)}")
         logger.add_event('data_retrieved', 'info', f'{len(df)} registres obtinguts')
 
         df['codi_eoi'] = df['codi_eoi'].astype(str)
 
         sync_missing_metadata(df, params)
-        logger.add_event('metadata_synced', 'info', 'Metadatos sincronizados')
+        logger.add_event('metadata_synced', 'info', 'Metadatos sincronitzats')
 
         df['id_station'] = df['codi_eoi'].map(available_stations)
         df['id_gas'] = df['contaminant'].map(available_gas)
@@ -466,14 +369,13 @@ def process_single_day(process_date, params):
         total_records = len(df_final)
 
         if total_records == 0:
-            print(f"[{fecha_str}] Cap registre valid.")
+            print(f"[{process_date}] Cap registre vàlid.")
             logger.add_event('no_valid_records', 'warning', 'Cap registre vàlid')
 
-            s3_log_path = logger.save_to_s3(execution_id, fecha_str)
-            logger.log_batch_success(execution_id, fecha_str, 0, time.time() - start_time, s3_log_path)
-            return fecha_str, True
+            s3_log_path = logger.save_to_s3(execution_id, process_date)
+            logger.log_batch_success(execution_id, process_date, 0, time.time() - start_time, s3_log_path)
+            return True
 
-        # Convertir numéricas
         numeric_cols = [col for col in df_final.columns if col.startswith('h') or col in ['altitud', 'magnitud']]
         for col in numeric_cols:
             if col in df_final.columns:
@@ -491,14 +393,8 @@ def process_single_day(process_date, params):
         connection = get_db_connection(params)
         with connection.cursor() as cursor:
             insert_sql = """
-                         INSERT \
-                         IGNORE INTO pollution_concentration (id_station, pollution_gas, date_measurement, concentration) 
-                         VALUES ( \
-                         %s, \
-                         %s, \
-                         %s, \
-                         %s \
-                         )
+                         INSERT IGNORE INTO pollution_concentration (id_station, pollution_gas, date_measurement, concentration)
+                         VALUES (%s, %s, %s, %s)
                          """
 
             tuples_to_insert = []
@@ -518,57 +414,42 @@ def process_single_day(process_date, params):
                 cursor.executemany(insert_sql, tuples_to_insert)
 
             cursor.execute("""
-                           INSERT INTO batch_execution_log (processed_date, path_result_athena,
-                                                            total_pollution_concentrations_added, id_status)
+                           INSERT INTO batch_execution_log (processed_date, path_result_athena, total_pollution_concentrations_added, id_status)
                            VALUES (%s, %s, %s, 4)
-                           """, (fecha_str, csv_uri, total_records))
+                           """, (process_date, csv_uri, total_records))
             connection.commit()
 
         connection.close()
 
         duration_seconds = time.time() - start_time
-        print(f"[{fecha_str}] ✓ Èxit! {total_records} files inserides en {duration_seconds:.1f}s.")
-        logger.add_event('batch_success', 'info', 'Batch completat', {
-            'total_records': total_records,
-            'duration_seconds': duration_seconds
-        })
+        print(f"[{process_date}] ✓ Èxit! {total_records} registres insertats en {duration_seconds:.1f}s.")
+        logger.add_event('batch_success', 'info', 'Batch completat')
 
-        # Guardar log en S3 (bucket dedicado)
-        s3_log_path = logger.save_to_s3(execution_id, fecha_str)
-
-        # Actualizar RDS con éxito
-        logger.log_batch_success(execution_id, fecha_str, total_records, duration_seconds, s3_log_path)
-        return fecha_str, True
+        s3_log_path = logger.save_to_s3(execution_id, process_date)
+        logger.log_batch_success(execution_id, process_date, total_records, duration_seconds, s3_log_path)
+        return True
 
     except Exception as e:
         duration_seconds = time.time() - start_time
-        print(f"[{fecha_str}] ✗ ERROR CRÍTIC: {e}")
-        logger.add_event('batch_error', 'error', str(e), {
-            'error_type': type(e).__name__,
-            'duration_seconds': duration_seconds
-        })
+        print(f"[{process_date}] ✗ ERROR CRÍTIC: {e}")
+        logger.add_event('batch_error', 'error', str(e))
 
-        # Guardar log en S3 (bucket dedicado) incluso con error
-        s3_log_path = logger.save_to_s3(execution_id, fecha_str)
-
-        # Actualizar RDS con error
+        s3_log_path = logger.save_to_s3(execution_id, process_date)
         logger.log_batch_error(execution_id, str(e)[:500], type(e).__name__, s3_log_path)
 
-        # También actualizar batch_execution_log (si existe)
         try:
             conn = get_db_connection(params)
             with conn.cursor() as cursor:
                 cursor.execute("INSERT INTO batch_execution_log (processed_date, id_status, log_s3) VALUES (%s, 6, %s)",
-                               (fecha_str, str(e)))
+                               (process_date, str(e)))
                 conn.commit()
             conn.close()
         except:
             pass
 
-        return fecha_str, False
+        return False
 
 
-# --- 5. ORQUESTRADOR PRINCIPAL ---
 def main():
     params = get_ssm_parameters()
     max_workers = int(params.get('CONCURRENT_ETL_WORKERS', 5))
@@ -581,36 +462,159 @@ def main():
         last_processed_date = cursor.fetchone()['last_processed_date']
     conn.close()
 
-    fecha_objetivo = datetime.now().date() - timedelta(days=1)
-    if last_processed_date >= fecha_objetivo:
+    target_date = datetime.now().date() - timedelta(days=1)
+    if last_processed_date >= target_date:
         print(f"El sistema de dades ja està al dia (Última data: {last_processed_date}).")
         return
 
-    dias_a_procesar = []
-    dia_actual = last_processed_date + timedelta(days=1)
-    while dia_actual <= fecha_objetivo:
-        dias_a_procesar.append(dia_actual)
-        dia_actual += timedelta(days=1)
+    days_to_process = []
+    current_day = last_processed_date + timedelta(days=1)
+    while current_day <= target_date:
+        days_to_process.append(current_day)
+        current_day += timedelta(days=1)
 
-    print(f"S'han llançat {len(dias_a_procesar)} dies a la cua de processament amb {max_workers} processos.")
+    print(f"\n[FASE 1] S'han iniciado {len(days_to_process)} queries a Athena...")
 
-    dias_exito = []
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futurs = {executor.submit(process_single_day, dia, params): dia for dia in dias_a_procesar}
-        for fut in as_completed(futurs):
-            dia = futurs[fut]
-            fecha_str, exito = fut.result()
-            if exito:
-                dias_exito.append(dia)
+    athena = boto3.client('athena', region_name='us-east-1')
+    s3_path_output = f"s3://{params['BUCKET_PROCESSED']}/athena-results/"
+    athena_db = params['ATHENEA_DB']
 
-    if dias_exito:
-        max_fecha_exito = max(dias_exito)
+    orchestrator = AthenaQueryOrchestrator(athena)
+
+    for day in days_to_process:
+        date_str = day.strftime('%Y-%m-%d')
+        execution_id = str(uuid.uuid4())
+
+        logger = ETLLogger(params, params['BUCKET_LOGS'])
+        logger.add_event('batch_start', 'info', 'Batch iniciado')
+
+        try:
+            logger.log_batch_start(execution_id, date_str)
+        except:
+            pass
+
+        query = f"""
+            WITH cleaned_lines AS (
+                SELECT 
+                    linea_text,
+                    CASE
+                        WHEN linea_text = '[]' THEN NULL
+                        WHEN linea_text LIKE '[%' THEN 
+                            substr(trim(linea_text), 2, length(trim(linea_text)) - 2)
+                        WHEN linea_text LIKE ',%' THEN 
+                            substr(trim(linea_text), 2)
+                        ELSE trim(linea_text)
+                    END AS json_candidate
+                FROM {athena_db}.air_quality_raw_text
+                WHERE linea_text IS NOT NULL AND trim(linea_text) != '[]'
+            ),
+            validated_json AS (
+                SELECT 
+                    json_candidate,
+                    TRY(json_parse(json_candidate)) AS registre
+                FROM cleaned_lines
+                WHERE json_candidate IS NOT NULL
+            ),
+            parsed_data AS (
+                SELECT registre
+                FROM validated_json
+                WHERE registre IS NOT NULL
+            )
+            SELECT 
+                json_extract_scalar(registre, '$.codi_eoi') AS codi_eoi,
+                json_extract_scalar(registre, '$.nom_estacio') AS nom_estacio,
+                json_extract_scalar(registre, '$.data') AS data_raw,
+                TRY(CAST(SUBSTRING(json_extract_scalar(registre, '$.data'), 1, 10) AS DATE)) AS data_parsed,
+                json_extract_scalar(registre, '$.magnitud') AS magnitud,
+                json_extract_scalar(registre, '$.contaminant') AS contaminant,
+                json_extract_scalar(registre, '$.unitats') AS unitats,
+                json_extract_scalar(registre, '$.tipus_estacio') AS tipus_estacio,
+                json_extract_scalar(registre, '$.area_urbana') AS area_urbana,
+                json_extract_scalar(registre, '$.codi_ine') AS codi_ine,
+                json_extract_scalar(registre, '$.municipi') AS municipi,
+                json_extract_scalar(registre, '$.codi_comarca') AS codi_comarca,
+                json_extract_scalar(registre, '$.nom_comarca') AS nom_comarca,
+                json_extract_scalar(registre, '$.altitud') AS altitud,
+                json_extract_scalar(registre, '$.latitud') AS latitud,
+                json_extract_scalar(registre, '$.longitud') AS longitud,
+                json_extract_scalar(registre, '$.h01') AS h01, json_extract_scalar(registre, '$.h02') AS h02,
+                json_extract_scalar(registre, '$.h03') AS h03, json_extract_scalar(registre, '$.h04') AS h04,
+                json_extract_scalar(registre, '$.h05') AS h05, json_extract_scalar(registre, '$.h06') AS h06,
+                json_extract_scalar(registre, '$.h07') AS h07, json_extract_scalar(registre, '$.h08') AS h08,
+                json_extract_scalar(registre, '$.h09') AS h09, json_extract_scalar(registre, '$.h10') AS h10,
+                json_extract_scalar(registre, '$.h11') AS h11, json_extract_scalar(registre, '$.h12') AS h12,
+                json_extract_scalar(registre, '$.h13') AS h13, json_extract_scalar(registre, '$.h14') AS h14,
+                json_extract_scalar(registre, '$.h15') AS h15, json_extract_scalar(registre, '$.h16') AS h16,
+                json_extract_scalar(registre, '$.h17') AS h17, json_extract_scalar(registre, '$.h18') AS h18,
+                json_extract_scalar(registre, '$.h19') AS h19, json_extract_scalar(registre, '$.h20') AS h20,
+                json_extract_scalar(registre, '$.h21') AS h21, json_extract_scalar(registre, '$.h22') AS h22,
+                json_extract_scalar(registre, '$.h23') AS h23, json_extract_scalar(registre, '$.h24') AS h24
+            FROM parsed_data
+            WHERE TRY(CAST(SUBSTRING(json_extract_scalar(registre, '$.data'), 1, 10) AS DATE)) = DATE '{date_str}'
+        """
+
+        try:
+            print(f"[{date_str}] Executant consulta Athena...")
+            logger.add_event('athena_query_start', 'info', 'Consulta Athena iniciada')
+
+            response = athena.start_query_execution(
+                QueryString=query,
+                ResultConfiguration={'OutputLocation': s3_path_output}
+            )
+            query_id = response['QueryExecutionId']
+
+            task = AthenaQueryTask(
+                process_date=date_str,
+                query_id=query_id,
+                execution_id=execution_id,
+                logger=logger,
+                start_time=time.time(),
+                query_string=query
+            )
+            orchestrator.submit_query(task)
+
+        except Exception as e:
+            print(f"[{date_str}] ✗ Error iniciando query: {e}")
+            logger.log_batch_error(execution_id, str(e)[:500], type(e).__name__, None)
+
+    print(f"\n[FASE 2] Consultant {len(orchestrator.queries)} queries en paral·lel...")
+    orchestrator.poll_all()
+
+    print(f"\n[FASE 3] Processant resultats conforme es completen...")
+
+    processed_count = 0
+    successful_days = []
+
+    while processed_count < len(days_to_process):
+        task, result = orchestrator.get_result(timeout=60)
+
+        if task is None:
+            print("[TIMEOUT] Esperant resultats...")
+            continue
+
+        try:
+            if isinstance(result, Exception):
+                raise result
+
+            success = process_task(task, result, params)
+            processed_count += 1
+
+            if success:
+                successful_days.append(datetime.strptime(task.process_date, '%Y-%m-%d').date())
+
+        except Exception as e:
+            print(f"[{task.process_date}] ✗ Error processant: {e}")
+            task.logger.log_batch_error(task.execution_id, str(e)[:500], type(e).__name__, None)
+            processed_count += 1
+
+    if successful_days:
+        max_successful_date = max(successful_days)
         conn = get_db_connection(params)
         with conn.cursor() as cursor:
-            cursor.execute("UPDATE etl_control SET last_processed_date = %s WHERE id = 1", (max_fecha_exito,))
+            cursor.execute("UPDATE etl_control SET last_processed_date = %s WHERE id = 1", (max_successful_date,))
             conn.commit()
         conn.close()
-        print(f"\n[CONTROL] Procés finalitzat. etl_control actualitzat fins a: {max_fecha_exito}")
+        print(f"\n[CONTROL] Procés finalitzat. etl_control actualitzat fins a: {max_successful_date}")
     else:
         print("\n[CONTROL] No s'ha pogut processar cap dia amb èxit.")
 
