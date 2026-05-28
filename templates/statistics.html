@@ -5,159 +5,196 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Estadístiques - Qualitat de l'Aire</title>
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.0/font/bootstrap-icons.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
     <style>
-        * {
+        :root {
+            --aws-orange: #FF9900;
+            --success: #28a745;
+            --danger: #dc3545;
+            --warning: #ffc107;
+            --info: #17a2b8;
+        }
+
+        body {
+            background-color: #f8f9fa;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
-        html, body {
-            height: 100%;
-            background: #f8fafc;
-            color: #2c3e50;
+        .navbar {
+            background: linear-gradient(135deg, var(--aws-orange) 0%, #ff8c00 100%);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
-        .navbar-top {
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-            border-bottom: 3px solid #3b82f6;
-            padding: 1.2rem 0;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        .navbar-brand {
+            font-weight: bold;
+            font-size: 1.5rem;
+            color: white !important;
         }
 
-        .navbar-top .navbar-brand {
-            font-size: 1.4rem;
-            font-weight: 700;
-            color: #3b82f6 !important;
-            letter-spacing: -0.5px;
-        }
-
-        .navbar-top .navbar-brand i {
-            margin-right: 0.5rem;
-        }
-
-        .page-header {
-            background: linear-gradient(135deg, #f8fafc 0%, #e8f0fc 100%);
-            border-bottom: 1px solid #e2e8f0;
-            padding: 2.5rem 0;
-        }
-
-        .page-header h1 {
-            color: #1e293b;
-            font-weight: 700;
-            font-size: 2rem;
-            margin-bottom: 0.3rem;
-        }
-
-        .page-header p {
-            color: #64748b;
-            margin: 0;
-            font-size: 1rem;
-        }
-
-        .filter-section {
+        .stat-card {
             background: white;
-            border-radius: 12px;
-            padding: 2rem;
-            margin-bottom: 2.5rem;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.05);
-            border: 1px solid #e2e8f0;
+            border-left: 4px solid var(--aws-orange);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
 
-        .filter-section h5 {
-            color: #1e293b;
+        .stat-card h5 {
+            color: #666;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            margin-bottom: 10px;
             font-weight: 600;
-            margin-bottom: 1.5rem;
-            font-size: 1.1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.7rem;
         }
 
-        .filter-section h5 i {
-            color: #3b82f6;
-            font-size: 1.2rem;
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--aws-orange);
+        }
+
+        .filter-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .filter-card h5 {
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 15px;
+            border-left: 4px solid var(--aws-orange);
+            padding-left: 10px;
         }
 
         .form-label {
-            font-weight: 500;
-            color: #334155;
-            margin-bottom: 0.6rem;
-            font-size: 0.95rem;
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
         }
 
         .form-control, .form-select, .select2-container--default .select2-selection--multiple {
-            border: 1px solid #cbd5e1;
-            border-radius: 8px;
-            padding: 0.7rem 1rem;
-            font-size: 0.95rem;
-            transition: all 0.3s ease;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
         }
 
         .form-control:focus, .form-select:focus {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-
-        .select2-container--default .select2-selection--multiple {
-            min-height: 40px;
-        }
-
-        .select2-selection__rendered {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.4rem;
+            border-color: var(--aws-orange);
+            box-shadow: 0 0 0 0.2rem rgba(255, 153, 0, 0.15);
         }
 
         .btn-search {
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            background: linear-gradient(135deg, var(--aws-orange) 0%, #ff8c00 100%);
             border: none;
             color: white;
             font-weight: 600;
-            padding: 0.7rem 2.5rem;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
         }
 
         .btn-search:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-        }
-
-        .btn-search:active {
-            transform: translateY(0);
-        }
-
-        .btn-clear {
-            background: #94a3b8;
-            border: none;
+            background: linear-gradient(135deg, #ff8c00 0%, #e67e00 100%);
             color: white;
-            font-weight: 600;
-            padding: 0.7rem 1.5rem;
+        }
+
+        .section-title {
+            color: #333;
+            font-weight: 700;
+            margin-bottom: 20px;
+            border-left: 4px solid var(--aws-orange);
+            padding-left: 15px;
+            margin-top: 30px;
+        }
+
+        .table-container {
+            background: white;
             border-radius: 8px;
-            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            padding: 0;
+            margin-bottom: 20px;
+            overflow: hidden;
         }
 
-        .btn-clear:hover {
-            background: #64748b;
-            color: white;
+        .table {
+            margin-bottom: 0;
         }
 
-        .loading-spinner {
-            display: none;
-            text-align: center;
-            padding: 4rem 0;
+        .table thead {
+            background-color: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
         }
 
-        .loading-spinner i {
-            font-size: 3.5rem;
-            color: #3b82f6;
+        .table thead th {
+            color: #495057;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            padding: 15px;
+            border: none;
+        }
+
+        .table tbody tr {
+            border-bottom: 1px solid #dee2e6;
+            transition: background-color 0.2s;
+        }
+
+        .table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .table tbody td {
+            padding: 15px;
+            vertical-align: middle;
+        }
+
+        .badge-success {
+            background-color: var(--success);
+        }
+
+        .badge-danger {
+            background-color: var(--danger);
+        }
+
+        .badge-info {
+            background-color: var(--info);
+        }
+
+        .card-chart {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .card-chart h6 {
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 20px;
+            border-left: 4px solid var(--aws-orange);
+            padding-left: 10px;
+        }
+
+        #map {
+            height: 500px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid var(--aws-orange);
+            border-radius: 50%;
             animation: spin 1s linear infinite;
         }
 
@@ -166,243 +203,60 @@
             100% { transform: rotate(360deg); }
         }
 
-        .results-header {
-            background: linear-gradient(135deg, #f8fafc 0%, #e8f0fc 100%);
-            border-bottom: 1px solid #e2e8f0;
-            padding: 2rem 0;
-            margin-bottom: 2.5rem;
-            border-radius: 0 0 12px 12px;
-        }
-
-        .results-header h2 {
-            color: #1e293b;
-            font-weight: 700;
-            margin: 0;
-            font-size: 1.8rem;
-        }
-
         .alert-warning {
-            border: none;
-            background: #fef3c7;
-            color: #92400e;
-            border-radius: 10px;
-            padding: 1.2rem 1.5rem;
-            margin-bottom: 2rem;
-            border-left: 4px solid #f59e0b;
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            color: #856404;
         }
 
-        .table-card {
-            background: white;
-            border-radius: 12px;
-            margin-bottom: 2.5rem;
-            overflow: hidden;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.05);
-            border: 1px solid #e2e8f0;
-        }
-
-        .table-card-header {
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-            color: white;
-            padding: 1.2rem 1.5rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 0.7rem;
-            font-size: 1rem;
-        }
-
-        .table-card-header i {
-            color: #3b82f6;
-            font-size: 1.1rem;
-        }
-
-        .table {
-            margin-bottom: 0;
-            font-size: 0.95rem;
-        }
-
-        .table thead {
-            background: #f1f5f9;
-            border-bottom: 2px solid #cbd5e1;
-        }
-
-        .table thead th {
-            color: #1e293b;
-            font-weight: 600;
-            padding: 1rem;
-            border: none;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-            letter-spacing: 0.5px;
-        }
-
-        .table tbody tr {
-            border-bottom: 1px solid #e2e8f0;
-            transition: background-color 0.2s;
-        }
-
-        .table tbody tr:hover {
-            background: #f8fafc;
-        }
-
-        .table tbody td {
-            padding: 0.9rem 1rem;
-            vertical-align: middle;
-        }
-
-        .badge {
-            font-weight: 600;
-            padding: 0.4rem 0.8rem;
-            border-radius: 6px;
-            font-size: 0.85rem;
-        }
-
-        .badge.bg-info {
-            background: #e0f2fe !important;
-            color: #0369a1;
-        }
-
-        .badge.bg-success {
-            background: #dcfce7 !important;
-            color: #166534;
-        }
-
-        .chart-container {
-            background: white;
-            border-radius: 12px;
-            padding: 2rem;
-            margin-bottom: 2.5rem;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.05);
-            border: 1px solid #e2e8f0;
-        }
-
-        .chart-container h5 {
-            color: #1e293b;
-            font-weight: 600;
-            margin-bottom: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.7rem;
-            font-size: 1.1rem;
-        }
-
-        .chart-container h5 i {
-            color: #3b82f6;
-        }
-
-        #map {
-            height: 500px;
-            border-radius: 10px;
-            margin-top: 1rem;
-            border: 1px solid #e2e8f0;
-        }
-
-        svg text {
+        svg {
             font-family: 'Segoe UI', sans-serif;
-            font-size: 12px;
         }
 
-        svg line, svg path {
-            stroke: #cbd5e1;
-            opacity: 0.3;
-        }
-
-        .chart-tooltip {
+        .refresh-badge {
             position: absolute;
-            padding: 12px 16px;
-            font-size: 13px;
-            background: #1e293b;
+            top: 10px;
+            right: 10px;
+            font-size: 0.8rem;
+            background-color: rgba(255,255,255,0.2);
+            padding: 5px 10px;
+            border-radius: 20px;
             color: white;
-            border-radius: 8px;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.2s;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-            z-index: 1000;
-            border-left: 3px solid #3b82f6;
-        }
-
-        .leaflet-popup-content-wrapper {
-            background: #1e293b;
-            color: white;
-            border-radius: 8px;
-            padding: 8px;
-        }
-
-        .leaflet-popup-tip {
-            background: #1e293b;
-        }
-
-        .page-footer {
-            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-            color: #cbd5e1;
-            text-align: center;
-            padding: 2rem 0;
-            margin-top: 3rem;
-            border-top: 1px solid #334155;
-        }
-
-        .page-footer p {
-            margin: 0;
-            font-size: 0.95rem;
-        }
-
-        @media (max-width: 768px) {
-            .page-header h1 {
-                font-size: 1.5rem;
-            }
-
-            .filter-section {
-                padding: 1.5rem;
-            }
-
-            #map {
-                height: 350px;
-            }
-
-            .table {
-                font-size: 0.85rem;
-            }
-
-            .table thead th, .table tbody td {
-                padding: 0.7rem 0.5rem;
-            }
         }
     </style>
 </head>
 <body>
     <!-- Navbar -->
-    <nav class="navbar-top">
-        <div class="container-fluid px-4">
-            <a class="navbar-brand" href="/">
-                <i class="fas fa-leaf"></i> Qualitat de l'Aire
-            </a>
+    <nav class="navbar navbar-dark">
+        <div class="container-fluid">
+            <span class="navbar-brand">
+                <i class="bi bi-graph-up"></i> Estadístiques ETL - Qualitat de l'Aire
+            </span>
+            <span class="refresh-badge">
+                <i class="bi bi-arrow-clockwise"></i> Actualització automàtica
+            </span>
         </div>
     </nav>
 
-    <!-- Page Header -->
-    <div class="page-header">
-        <div class="container-fluid px-4">
-            <h1><i class="fas fa-chart-bar"></i> Estadístiques Detallades</h1>
-            <p>Analitza i explora les dades de qualitat de l'aire amb filtres personalitzats</p>
-        </div>
-    </div>
+    <!-- Contenidor principal -->
+    <div class="container-fluid mt-4">
+        <a href="/" target="_blank" class="btn btn-outline-secondary mb-4">
+            <i class="bi bi-arrow-left"></i> Panell Principal
+        </a>
 
-    <!-- Main Content -->
-    <div class="container-fluid px-4 py-5">
-        <!-- Filter Section -->
-        <div class="filter-section">
-            <h5><i class="fas fa-sliders-h"></i> Filtres de Cerca</h5>
+        <!-- Filtres -->
+        <div class="filter-card">
+            <h5><i class="bi bi-funnel"></i> Filtres de Cerca</h5>
             <form name="filters">
-                <div class="row g-4">
-                    <div class="col-12 col-md-4">
+                <div class="row g-3">
+                    <div class="col-md-4">
                         <label class="form-label">Rang de Dates</label>
                         <input type="text" name="datefilter" class="form-control" placeholder="Selecciona dates..." required>
                         <input type="hidden" name="startdate" value="">
                         <input type="hidden" name="enddate" value="">
                     </div>
 
-                    <div class="col-12 col-md-4">
+                    <div class="col-md-4">
                         <label class="form-label">Contaminants</label>
                         <select name="gas" class="form-select select2" multiple required>
                             {% for gas in pollution_gas %}
@@ -411,7 +265,7 @@
                         </select>
                     </div>
 
-                    <div class="col-12 col-md-4">
+                    <div class="col-md-4">
                         <label class="form-label">Estacions (opcional)</label>
                         <select name="station" class="form-select select2" multiple>
                             {% for station in stations %}
@@ -421,33 +275,32 @@
                     </div>
                 </div>
 
-                <div class="row mt-4">
-                    <div class="col-12 d-flex justify-content-end gap-3">
-                        <button type="button" class="btn btn-clear" onclick="resetForm()">
-                            <i class="fas fa-redo"></i> Netejar
+                <div class="row mt-3">
+                    <div class="col-12 d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-outline-secondary" onclick="resetForm()">
+                            <i class="bi bi-arrow-counterclockwise"></i> Netejar
                         </button>
                         <button type="button" class="btn btn-search" onclick="submitSearch()">
-                            <i class="fas fa-search"></i> Cercar Resultats
+                            <i class="bi bi-search"></i> Cercar
                         </button>
                     </div>
                 </div>
             </form>
         </div>
 
-        <!-- Loading Spinner -->
-        <div class="loading-spinner" id="loadingResults">
-            <i class="fas fa-spinner fa-spin"></i>
-            <p class="mt-3 text-muted">Carregant dades...</p>
+        <!-- Loading -->
+        <div id="loadingResults" style="display: none; text-align: center; padding: 40px;">
+            <div class="loading"></div>
+            <p class="mt-3 text-muted">Carregant resultats...</p>
         </div>
 
-        <!-- Results Container -->
+        <!-- Resultats -->
         <div id="results"></div>
     </div>
 
-
     <!-- Scripts -->
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
@@ -480,7 +333,7 @@
         }
 
         function initSelect2() {
-            $('.select2').select2({ width: '100%' });
+            $('.select2').select2();
         }
 
         function submitSearch() {
@@ -534,112 +387,10 @@
         }
 
         function renderAllCharts() {
+            renderTimeSeries();
+            renderBarChart();
             renderBoxplot();
             renderMap();
-            renderBarChart();
-            renderTimeSeries();
-        }
-
-        function renderBoxplot() {
-            if (!window.boxplotData || window.boxplotData.length === 0) return;
-
-            window.boxplotData.forEach(d => d.valor = +d.concentration);
-            const dataByUnit = d3.group(window.boxplotData, d => d.unitat);
-            const allContaminants = Array.from(new Set(window.boxplotData.map(d => d.contaminant)));
-            const color = d3.scaleOrdinal().domain(allContaminants).range(["#3b82f6", "#ef4444", "#10b981", "#f59e0b"]);
-
-            dataByUnit.forEach((unitData, unitName) => {
-                const chartWrapper = d3.select("#boxplot-container").append("div").attr("class", "chart-container");
-                const margin = {top: 40, right: 30, bottom: 40, left: 60}, width = 900 - margin.left - margin.right, height = 320 - margin.top - margin.bottom;
-
-                const svg = chartWrapper.append("svg")
-                    .attr("width", width + margin.left + margin.right)
-                    .attr("height", height + margin.top + margin.bottom)
-                    .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
-
-                svg.append("text").attr("x", width / 2).attr("y", -15).attr("text-anchor", "middle")
-                    .style("font-size", "15px").style("font-weight", "600").style("fill", "#1e293b")
-                    .text(`Distribució de Contaminants (${unitName})`);
-
-                const sumstat = Array.from(d3.group(unitData, d => d.contaminant), ([key, values]) => {
-                    const sorted = values.map(g => g.valor).sort(d3.ascending);
-                    const q1 = d3.quantile(sorted, .25), median = d3.quantile(sorted, .5), q3 = d3.quantile(sorted, .75);
-                    const iqr = q3 - q1, min = Math.max(d3.min(sorted), q1 - 1.5 * iqr), max = Math.min(d3.max(sorted), q3 + 1.5 * iqr);
-                    const outliers = values.filter(d => d.valor < min || d.valor > max);
-                    return { key, q1, median, q3, min, max, outliers };
-                });
-
-                const x = d3.scaleBand().domain(sumstat.map(d => d.key)).range([0, width]).paddingInner(1).paddingOuter(.5);
-                svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x));
-
-                const y = d3.scaleLinear().domain([0, d3.max(unitData, d => d.valor) * 1.1]).nice().range([height, 0]);
-                svg.append("g").call(d3.axisLeft(y));
-
-                const boxWidth = 50;
-                svg.selectAll(".boxes").data(sumstat).join("rect")
-                    .attr("x", d => x(d.key) - boxWidth/2).attr("y", d => y(d.q3))
-                    .attr("height", d => y(d.q1) - y(d.q3)).attr("width", boxWidth)
-                    .attr("fill", d => color(d.key)).style("opacity", 0.7).attr("stroke", "#cbd5e1").attr("stroke-width", 1);
-
-                svg.selectAll(".vertLines").data(sumstat).join("line")
-                    .attr("x1", d => x(d.key)).attr("x2", d => x(d.key))
-                    .attr("y1", d => y(d.min)).attr("y2", d => y(d.max))
-                    .attr("stroke", "#cbd5e1").attr("stroke-width", 2);
-
-                svg.selectAll(".medianLines").data(sumstat).join("line")
-                    .attr("x1", d => x(d.key) - boxWidth/2).attr("x2", d => x(d.key) + boxWidth/2)
-                    .attr("y1", d => y(d.median)).attr("y2", d => y(d.median))
-                    .attr("stroke", "#1e293b").attr("stroke-width", 3);
-            });
-        }
-
-        function renderMap() {
-            if (!document.getElementById('map') || !window.mapData || window.mapData.length === 0) return;
-
-            const map = L.map('map').setView([41.75, 1.75], 8);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 40, attribution: '© OpenStreetMap' }).addTo(map);
-
-            window.mapData.forEach(estacio => {
-                const customIcon = L.divIcon({
-                    html: `<svg width="32" height="44" viewBox="0 0 32 44" fill="none"><path d="M16 2C10.48 2 6 6.48 6 12c0 8.4 10 20 10 20s10-11.6 10-20c0-5.52-4.48-10-10-10z" fill="#3b82f6"/><circle cx="16" cy="12" r="4" fill="white"/></svg>`,
-                    iconSize: [32, 44], iconAnchor: [16, 44], popupAnchor: [0, -40]
-                });
-                const marker = L.marker([estacio.lat, estacio.lng], { icon: customIcon }).addTo(map);
-                marker.bindPopup(`<strong>${estacio.nom}</strong><br><small>${estacio.tipus}</small>`);
-            });
-        }
-
-        function renderBarChart() {
-            if (!window.barChartData || window.barChartData.length === 0) return;
-
-            const margin = {top: 40, right: 120, bottom: 40, left: 60}, width = 900 - margin.left - margin.right, height = 350 - margin.top - margin.bottom;
-            const svg = d3.select("#bar-chart-impact").append("svg")
-                .attr("width", width + margin.left + margin.right).attr("height", height + margin.top + margin.bottom)
-                .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
-
-            svg.append("text").attr("x", width / 2).attr("y", -15).attr("text-anchor", "middle")
-                .style("font-size", "15px").style("font-weight", "600").style("fill", "#1e293b")
-                .text("Impacte de l'Entorn en la Contaminació");
-
-            const contaminants = Array.from(new Set(window.barChartData.map(d => d.contaminant)));
-            const tipusEstacions = Array.from(new Set(window.barChartData.map(d => d.tipus_estacio)));
-            const x0 = d3.scaleBand().domain(contaminants).rangeRound([0, width]).paddingInner(0.1);
-            const x1 = d3.scaleBand().domain(tipusEstacions).rangeRound([0, x0.bandwidth()]).padding(0.05);
-            const y = d3.scaleLinear().domain([0, d3.max(window.barChartData, d => d.mitjana_concentracio)]).nice().rangeRound([height, 0]);
-            const color = d3.scaleOrdinal().domain(tipusEstacions).range(["#3b82f6", "#ef4444", "#10b981"]);
-
-            svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x0));
-            svg.append("g").call(d3.axisLeft(y));
-
-            const bars = svg.append("g").selectAll("g").data(d3.group(window.barChartData, d => d.contaminant))
-                .join("g").attr("transform", d => `translate(${x0(d[0])},0)`)
-                .selectAll("rect").data(d => d[1]).join("rect")
-                .attr("x", d => x1(d.tipus_estacio)).attr("y", height).attr("width", x1.bandwidth()).attr("height", 0)
-                .attr("fill", d => color(d.tipus_estacio)).style("opacity", 0.8);
-
-            bars.transition().duration(800).delay((d, i) => i * 50)
-                .attr("y", d => y(d.mitjana_concentracio))
-                .attr("height", d => height - y(d.mitjana_concentracio));
         }
 
         function renderTimeSeries() {
@@ -652,19 +403,17 @@
             });
 
             const dataByUnit = d3.group(window.timeSeriesData, d => d.unit);
-            const margin = {top: 40, right: 120, bottom: 40, left: 60}, width = 900 - margin.left - margin.right, height = 350 - margin.top - margin.bottom;
+            const margin = {top: 30, right: 120, bottom: 40, left: 60}, width = 1000 - margin.left - margin.right, height = 350 - margin.top - margin.bottom;
 
             dataByUnit.forEach((unitData, unitName) => {
-                const chartDiv = d3.select("#charts-container").append("div").attr("class", "chart-container");
+                const chartDiv = d3.select("#charts-container").append("div").attr("class", "card-chart");
+                chartDiv.append("h6").text(`Evolució de Gasos (${unitName})`);
+
                 const dataGrouped = d3.group(unitData, d => d.serie_key);
-
                 const svg = chartDiv.append("svg")
-                    .attr("width", width + margin.left + margin.right).attr("height", height + margin.top + margin.bottom)
+                    .attr("width", width + margin.left + margin.right)
+                    .attr("height", height + margin.top + margin.bottom)
                     .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
-
-                svg.append("text").attr("x", width / 2).attr("y", -15).attr("text-anchor", "middle")
-                    .style("font-size", "15px").style("font-weight", "600").style("fill", "#1e293b")
-                    .text(`Evolució de Gasos (${unitName})`);
 
                 const x = d3.scaleTime().domain(d3.extent(unitData, d => d.date)).range([0, width]);
                 svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x).ticks(8));
@@ -672,10 +421,10 @@
                 const y = d3.scaleLinear().domain([0, d3.max(unitData, d => d.concentration) * 1.1]).range([height, 0]);
                 svg.append("g").call(d3.axisLeft(y));
 
-                const color = d3.scaleOrdinal().domain(Array.from(dataGrouped.keys())).range(["#3b82f6", "#ef4444", "#10b981", "#f59e0b"]);
+                const color = d3.scaleOrdinal().domain(Array.from(dataGrouped.keys())).range(["#0066cc", "#ff6600", "#00cc66", "#ff0066"]);
                 const lineGenerator = d3.line().x(d => x(d.date)).y(d => y(d.concentration)).defined(d => !isNaN(d.concentration));
 
-                svg.selectAll(".line-path").data(dataGrouped).enter().append("path")
+                svg.selectAll(".line").data(dataGrouped).enter().append("path")
                     .attr("fill", "none").attr("stroke", d => color(d[0])).attr("stroke-width", 2.5)
                     .attr("d", d => lineGenerator(d[1]));
 
@@ -683,6 +432,107 @@
                     .attr("transform", (d, i) => `translate(${width + 20}, ${i * 25})`);
                 legendItems.append("rect").attr("width", 12).attr("height", 12).attr("fill", d => color(d[0]));
                 legendItems.append("text").attr("x", 20).attr("y", 10).style("font-size", "12px").text(d => d[0]);
+            });
+        }
+
+        function renderBarChart() {
+            if (!window.barChartData || window.barChartData.length === 0) return;
+
+            const margin = {top: 30, right: 120, bottom: 40, left: 60}, width = 1000 - margin.left - margin.right, height = 350 - margin.top - margin.bottom;
+            const chartDiv = d3.select("#bar-chart-impact").append("div").attr("class", "card-chart");
+            chartDiv.append("h6").text("Impacte de l'Entorn en la Contaminació");
+
+            const svg = chartDiv.append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+            const contaminants = Array.from(new Set(window.barChartData.map(d => d.contaminant)));
+            const tipusEstacions = Array.from(new Set(window.barChartData.map(d => d.tipus_estacio)));
+
+            const x0 = d3.scaleBand().domain(contaminants).rangeRound([0, width]).paddingInner(0.1);
+            const x1 = d3.scaleBand().domain(tipusEstacions).rangeRound([0, x0.bandwidth()]).padding(0.05);
+            const y = d3.scaleLinear().domain([0, d3.max(window.barChartData, d => d.mitjana_concentracio)]).nice().rangeRound([height, 0]);
+            const color = d3.scaleOrdinal().domain(tipusEstacions).range(["#0066cc", "#ff6600", "#00cc66"]);
+
+            svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x0));
+            svg.append("g").call(d3.axisLeft(y));
+
+            const bars = svg.append("g").selectAll("g").data(d3.group(window.barChartData, d => d.contaminant))
+                .join("g").attr("transform", d => `translate(${x0(d[0])},0)`)
+                .selectAll("rect").data(d => d[1]).join("rect")
+                .attr("x", d => x1(d.tipus_estacio)).attr("y", height).attr("width", x1.bandwidth()).attr("height", 0)
+                .attr("fill", d => color(d.tipus_estacio));
+
+            bars.transition().duration(800).attr("y", d => y(d.mitjana_concentracio))
+                .attr("height", d => height - y(d.mitjana_concentracio));
+        }
+
+        function renderBoxplot() {
+            if (!window.boxplotData || window.boxplotData.length === 0) return;
+
+            window.boxplotData.forEach(d => d.valor = +d.concentration);
+            const dataByUnit = d3.group(window.boxplotData, d => d.unitat);
+            const margin = {top: 30, right: 30, bottom: 40, left: 60}, width = 1000 - margin.left - margin.right, height = 350 - margin.top - margin.bottom;
+
+            dataByUnit.forEach((unitData, unitName) => {
+                const chartDiv = d3.select("#boxplot-container").append("div").attr("class", "card-chart");
+                chartDiv.append("h6").text(`Distribució de Contaminants (${unitName})`);
+
+                const svg = chartDiv.append("svg")
+                    .attr("width", width + margin.left + margin.right)
+                    .attr("height", height + margin.top + margin.bottom)
+                    .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+                const sumstat = Array.from(d3.group(unitData, d => d.contaminant), ([key, values]) => {
+                    const sorted = values.map(g => g.valor).sort(d3.ascending);
+                    const q1 = d3.quantile(sorted, .25), median = d3.quantile(sorted, .5), q3 = d3.quantile(sorted, .75);
+                    const iqr = q3 - q1;
+                    const min = Math.max(d3.min(sorted), q1 - 1.5 * iqr);
+                    const max = Math.min(d3.max(sorted), q3 + 1.5 * iqr);
+                    return { key, q1, median, q3, min, max };
+                });
+
+                const x = d3.scaleBand().domain(sumstat.map(d => d.key)).range([0, width]).paddingInner(1).paddingOuter(.5);
+                svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x));
+
+                const y = d3.scaleLinear().domain([0, d3.max(unitData, d => d.valor) * 1.1]).range([height, 0]);
+                svg.append("g").call(d3.axisLeft(y));
+
+                const boxWidth = 50;
+                svg.selectAll(".boxes").data(sumstat).join("rect")
+                    .attr("x", d => x(d.key) - boxWidth/2).attr("y", d => y(d.q3))
+                    .attr("height", d => y(d.q1) - y(d.q3)).attr("width", boxWidth)
+                    .attr("fill", "#0066cc").style("opacity", 0.7).attr("stroke", "#333").attr("stroke-width", 1);
+
+                svg.selectAll(".lines").data(sumstat).join("line")
+                    .attr("x1", d => x(d.key)).attr("x2", d => x(d.key))
+                    .attr("y1", d => y(d.min)).attr("y2", d => y(d.max))
+                    .attr("stroke", "#333").attr("stroke-width", 2);
+
+                svg.selectAll(".median").data(sumstat).join("line")
+                    .attr("x1", d => x(d.key) - boxWidth/2).attr("x2", d => x(d.key) + boxWidth/2)
+                    .attr("y1", d => y(d.median)).attr("y2", d => y(d.median))
+                    .attr("stroke", "#ff6600").attr("stroke-width", 3);
+            });
+        }
+
+        function renderMap() {
+            if (!document.getElementById('map') || !window.mapData || window.mapData.length === 0) return;
+
+            const map = L.map('map').setView([41.75, 1.75], 8);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 40 }).addTo(map);
+
+            window.mapData.forEach(estacio => {
+                const marker = L.circleMarker([estacio.lat, estacio.lng], {
+                    radius: 8,
+                    fillColor: "#FF9900",
+                    color: "#fff",
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                }).addTo(map);
+                marker.bindPopup(`<strong>${estacio.nom}</strong><br><small>${estacio.tipus}</small>`);
             });
         }
     </script>

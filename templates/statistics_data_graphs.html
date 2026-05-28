@@ -1,128 +1,115 @@
-<div class="results-header">
-    <div class="container-fluid px-4">
-        <h2><i class="fas fa-chart-line"></i> Resultats de la Cerca</h2>
+<h3 class="section-title"><i class="bi bi-graph-up"></i> Resultats de la Cerca</h3>
+
+{% if not info.has_data %}
+    <div class="alert alert-warning" role="alert">
+        <i class="bi bi-exclamation-triangle"></i>
+        <strong>Sense dades.</strong> No s'han trobat registres que coincideixin amb els filtres seleccionats.
     </div>
-</div>
+{% else %}
 
-<div class="container-fluid px-4">
-    {% if not info.has_data %}
-        <div class="alert alert-warning" role="alert">
-            <i class="fas fa-exclamation-triangle"></i>
-            <strong>Sense dades.</strong> No s'han trobat registres que coincideixin amb els filtres seleccionats. Prova a ampliar el rang de dates.
-        </div>
-    {% else %}
-
-        <!-- Taula Concentració Màxima -->
-        {% if info.maximum_concentration_gas %}
-        <div class="table-card">
-            <div class="table-card-header">
-                <i class="fas fa-arrow-up"></i> Concentració Màxima de Gasos
-            </div>
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Concentració</th>
-                        <th>Contaminant</th>
-                        <th>Data</th>
-                        <th>Municipi</th>
-                        <th>Estació</th>
-                        <th>Tipus</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for gas in info.maximum_concentration_gas %}
-                    <tr>
-                        <td><strong style="color: #ef4444;">{{ gas.max_concentration }}</strong></td>
-                        <td>{{ gas.name_gas }} <span class="text-muted">({{ gas.name_units }})</span></td>
-                        <td>{{ gas.date_measurement }}</td>
-                        <td>{{ gas.name_municipality }}</td>
-                        <td>{{ gas.name_station }}</td>
-                        <td><span class="badge bg-info">{{ gas.name_type }}</span></td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endif %}
-
-        <!-- Taula Concentració Mínima -->
-        {% if info.minimum_concentration_gas %}
-        <div class="table-card">
-            <div class="table-card-header">
-                <i class="fas fa-arrow-down"></i> Concentració Mínima de Gasos
-            </div>
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Concentració</th>
-                        <th>Contaminant</th>
-                        <th>Data</th>
-                        <th>Municipi</th>
-                        <th>Estació</th>
-                        <th>Tipus</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for gas in info.minimum_concentration_gas %}
-                    <tr>
-                        <td><strong style="color: #10b981;">{{ gas.min_concentration }}</strong></td>
-                        <td>{{ gas.name_gas }} <span class="text-muted">({{ gas.name_units }})</span></td>
-                        <td>{{ gas.date_measurement }}</td>
-                        <td>{{ gas.name_municipality }}</td>
-                        <td>{{ gas.name_station }}</td>
-                        <td><span class="badge bg-success">{{ gas.name_type }}</span></td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endif %}
-
-        <!-- Taula Concentració Mitjana -->
-        {% if info.avg_concentration_gas %}
-        <div class="table-card">
-            <div class="table-card-header">
-                <i class="fas fa-equals"></i> Concentració Mitjana de Gasos
-            </div>
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Contaminant</th>
-                        <th>Concentració Mitjana</th>
-                        {% if info.stations %}<th>Estació</th>{% endif %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for gas in info.avg_concentration_gas %}
-                    <tr>
-                        <td>{{ gas.name_gas }} <span class="text-muted">({{ gas.name_units }})</span></td>
-                        <td><strong style="color: #3b82f6;">{{ gas.avg_concentration }}</strong></td>
-                        {% if info.stations %}<td>{{ gas.name_station }}</td>{% endif %}
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endif %}
-
-        <!-- Gràfics -->
-        <div id="charts-container"></div>
-        <div id="bar-chart-impact"></div>
-        <div id="boxplot-container"></div>
-
-        <!-- Mapa -->
-        <div class="chart-container">
-            <h5><i class="fas fa-map-marker-alt"></i> Distribució de les Estacions de Monitoratge</h5>
-            <div id="map"></div>
-        </div>
-
-        <!-- Export data to JS -->
-        <script>
-            window.boxplotData = {{ info.boxplot_data | safe }};
-            window.mapData = {{ info.map_data | safe }};
-            window.barChartData = {{ info.pollution_station_gas_info | safe }};
-            window.timeSeriesData = {{ info.pollution_gas_info_per_day | safe }};
-        </script>
-
+    <!-- Taula Concentració Màxima -->
+    {% if info.maximum_concentration_gas %}
+    <div class="table-container">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th><i class="bi bi-arrow-up"></i> Concentració Màxima</th>
+                    <th>Contaminant</th>
+                    <th>Data</th>
+                    <th>Municipi</th>
+                    <th>Estació</th>
+                    <th>Tipus</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for gas in info.maximum_concentration_gas %}
+                <tr>
+                    <td><strong style="color: #dc3545;">{{ gas.max_concentration }}</strong></td>
+                    <td>{{ gas.name_gas }} <small class="text-muted">({{ gas.name_units }})</small></td>
+                    <td>{{ gas.date_measurement }}</td>
+                    <td>{{ gas.name_municipality }}</td>
+                    <td>{{ gas.name_station }}</td>
+                    <td><span class="badge badge-danger">{{ gas.name_type }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
     {% endif %}
-</div>
+
+    <!-- Taula Concentració Mínima -->
+    {% if info.minimum_concentration_gas %}
+    <div class="table-container">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th><i class="bi bi-arrow-down"></i> Concentració Mínima</th>
+                    <th>Contaminant</th>
+                    <th>Data</th>
+                    <th>Municipi</th>
+                    <th>Estació</th>
+                    <th>Tipus</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for gas in info.minimum_concentration_gas %}
+                <tr>
+                    <td><strong style="color: #28a745;">{{ gas.min_concentration }}</strong></td>
+                    <td>{{ gas.name_gas }} <small class="text-muted">({{ gas.name_units }})</small></td>
+                    <td>{{ gas.date_measurement }}</td>
+                    <td>{{ gas.name_municipality }}</td>
+                    <td>{{ gas.name_station }}</td>
+                    <td><span class="badge badge-success">{{ gas.name_type }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Taula Concentració Mitjana -->
+    {% if info.avg_concentration_gas %}
+    <div class="table-container">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th><i class="bi bi-equals"></i> Concentració Mitjana</th>
+                    <th>Mitjana</th>
+                    {% if info.stations %}<th>Estació</th>{% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for gas in info.avg_concentration_gas %}
+                <tr>
+                    <td>{{ gas.name_gas }} <small class="text-muted">({{ gas.name_units }})</small></td>
+                    <td><strong style="color: #0066cc;">{{ gas.avg_concentration }}</strong></td>
+                    {% if info.stations %}<td>{{ gas.name_station }}</td>{% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Gràfics -->
+    <h3 class="section-title"><i class="bi bi-graph-up"></i> Gràfics i Visualitzacions</h3>
+
+    <div id="charts-container"></div>
+    <div id="bar-chart-impact"></div>
+    <div id="boxplot-container"></div>
+
+    <!-- Mapa -->
+    <div class="card-chart">
+        <h6><i class="bi bi-geo-alt"></i> Distribució de les Estacions</h6>
+        <div id="map"></div>
+    </div>
+
+    <!-- Export data to JS -->
+    <script>
+        window.boxplotData = {{ info.boxplot_data | safe }};
+        window.mapData = {{ info.map_data | safe }};
+        window.barChartData = {{ info.pollution_station_gas_info | safe }};
+        window.timeSeriesData = {{ info.pollution_gas_info_per_day | safe }};
+    </script>
+
+{% endif %}
