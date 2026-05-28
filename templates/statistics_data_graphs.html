@@ -227,7 +227,12 @@
     <!-- Scripts de gràfics -->
     <script>
     (function() {
-        const timeData = {{ info.pollution_gas_info_per_day | safe }};
+        let timeData = {{ info.pollution_gas_info_per_day | safe }};
+
+        // Parsear si es string JSON
+        if (typeof timeData === 'string') {
+            timeData = JSON.parse(timeData);
+        }
 
         if (timeData.length === 0) {
             d3.select("#charts-container").append("p")
@@ -329,7 +334,12 @@
 
     <script>
     (function() {
-        const barData = {{ info.pollution_station_gas_info | safe }};
+        let barData = {{ info.pollution_station_gas_info | safe }};
+
+        // Parsear si es string JSON
+        if (typeof barData === 'string') {
+            barData = JSON.parse(barData);
+        }
 
         if (barData.length === 0) {
             d3.select("#bar-chart-impact").append("p")
@@ -425,7 +435,12 @@
 
     <script>
     (function() {
-        const boxData = {{ info.boxplot_data | safe }};
+        let boxData = {{ info.boxplot_data | safe }};
+
+        // Parsear si es string JSON
+        if (typeof boxData === 'string') {
+            boxData = JSON.parse(boxData);
+        }
 
         if (boxData.length === 0) {
             d3.select("#boxplot-container").append("p")
@@ -505,7 +520,14 @@
 
     <script>
     (function() {
-        const mapData = {{ info.map_data | safe }};
+        let mapData = {{ info.map_data | safe }};
+
+        // Parsear si es string JSON
+        if (typeof mapData === 'string') {
+            mapData = JSON.parse(mapData);
+        }
+
+        console.log("📍 Datos del mapa:", mapData);
 
         if (!mapData || mapData.length === 0) {
             d3.select("#map-container").append("p")
@@ -519,7 +541,7 @@
         const mapContainer = d3.select("#map-container");
         mapContainer.html("");
         mapContainer.append("h6").text("Distribució de les Estacions");
-        const mapDiv = mapContainer.append("div").attr("id", "map").style("height", "400px");
+        const mapDiv = mapContainer.append("div").attr("id", "map").style("height", "450px");
 
         setTimeout(() => {
             const map = L.map('map').setView([41.75, 1.75], 8);
@@ -530,7 +552,9 @@
                     radius: 8, fillColor: "#FF9900", color: "#fff", weight: 2, opacity: 1, fillOpacity: 0.8
                 }).addTo(map).bindPopup(`<strong>${estacio.nom}</strong><br><small>${estacio.tipus}</small>`);
             });
-        }, 100);
+
+            console.log("✅ Mapa carregat amb " + mapData.length + " estacions");
+        }, 150);
     })();
     </script>
 
