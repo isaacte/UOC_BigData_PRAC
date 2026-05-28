@@ -21,5 +21,6 @@ En aquest repositori hi ha tots els arxius i scripts necessaris per a la instàn
 * `etl.py`: Script python que executa tot el procediment de recuperació de les dades originals (en el *data lake* d'S3) a través d'Athena i converteix el CSV resultant d'Athena a inserts a la base de dades.
 * `flaskapp.serice`: Servei que permet que l'aplicació flask s'executi en background dins de l'EC2.
 * `init.sh`: Script que s'executa inicialment a la instància d'EC2 i que prepara el desplegament de la màquina d'EC2.
+* `init_db.py`: Inicialitza la base de dades creant totes les taules necessaries per a la càrrega de les dades.
 * `requirements.txt`: Fitxer de requeriments de llibreries python necessaries per a que la màquina funcioni correctament.
 * `statistics_queries.py`: Fitxer auxiliar que conté totes les consules necessaries per a generar els gràfics i les taules resum de les dades desades a base de dades relatives a la qualitat de l'aire de Catalunya.
