@@ -544,7 +544,9 @@
 
         setTimeout(() => {
             // 1. Inicialitzar el mapa centrat a Catalunya
-            const map = L.map('map').setView([41.75, 1.75], 8);
+            const map = L.map('map', {
+                attributionControl: false  // Ocultar atribución por defecto
+            }).setView([41.75, 1.75], 8);
 
             // 2. Afegir la capa de mapa estándar d'OpenStreetMap
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -621,8 +623,8 @@
             const legend = L.control({ position: 'bottomright' });
             legend.onAdd = function() {
                 const div = L.DomUtil.create('div', 'map-legend');
-                const estats = ["Bona", "Raonablement bona", "Regular", "Desfavorable", "Molt desfavorable", "Extremadament desfavorable"];
-                const colors = ["#3a9ad9", "#4daf4a", "#ffcc00", "#e41a1c", "#800000", "#7a297a"];
+                const estats = ["Bona", "Regular", "Molt desfavorable", "Raonablement bona", "Desfavorable", "Extremadament desfavorable"];
+                const colors = ["#3a9ad9", "#ffcc00", "#7a297a", "#4daf4a", "#e41a1c", "#800000"];
 
                 let html = `
                     <div style="background: rgba(255, 255, 255, 0.95); padding: 10px 14px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); font-family: sans-serif; font-size: 11px; color: #333; line-height: 20px;">
