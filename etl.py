@@ -1,5 +1,4 @@
-import asyncio
-
+import queue
 import boto3
 import pymysql
 import sys
@@ -265,35 +264,75 @@ def sync_missing_metadata(df, params):
         conn.close()
 
 
-# ✅ FUNCIÓ ASYNC PER ESPERAR ATHENA (sense bloquear)
-async def wait_athena_query_async(athena, query_id, max_wait=3600):
+# ✅ FUNCIÓ PER ESPERAR ATHENA (Threading puro - NO bloqueja ThreadPoolExecutor)
+def wait_athena_query_threaded(athena, query_id, max_wait=3600):
     """
-    Esperar Athena query SIN BLOQUEAR el hilo principal
-    - asyncio.sleep() libera el hilo mientras espera
+    Esperar Athena query SIN BLOQUEAR el thread principal del ThreadPoolExecutor
+
+    - Crea UN thread separado para polling
+    - El thread principal puede hacer otras cosas
+    - Usa queue.Queue para comunicación thread-safe
     - Exponential backoff: 1s → 2s → 4s → 8s → ... → 60s
     """
-    wait_time = 1
-    elapsed = 0
+    result_queue = queue.Queue()
 
-    while elapsed < max_wait:
-        resp = athena.get_query_execution(QueryExecutionId=query_id)
-        status = resp['QueryExecution']['Status']['State']
+    def _wait_in_background():
+        """Esta función corre en UN THREAD SEPARADO (daemon)"""
+        wait_time = 1
+        elapsed = 0
 
-        if status == 'SUCCEEDED':
-            print(f"✅ Query completada en {elapsed}s (sin bloquear)")
-            return resp
+        try:
+            while elapsed < max_wait:
+                resp = athena.get_query_execution(QueryExecutionId=query_id)
+                status = resp['QueryExecution']['Status']['State']
 
-        elif status in ['FAILED', 'CANCELLED']:
-            raise Exception(f"Athena query {status}")
+                if status == 'SUCCEEDED':
+                    result_queue.put(('success', resp))
+                    return
 
-        # ✅ asyncio.sleep() NO bloqueja el hilo principal
-        print(f"⏳ Esperant {wait_time}s...")
-        await asyncio.sleep(wait_time)
+                elif status in ['FAILED', 'CANCELLED']:
+                    reason = resp['QueryExecution']['Status'].get('StateChangeReason', 'Unknown')
+                    result_queue.put(('error', f"Query {status}: {reason}"))
+                    return
 
-        elapsed += wait_time
-        wait_time = min(wait_time * 2, 60)  # Exponential backoff
+                # time.sleep() aquí está en thread separado
+                # NO bloquea el thread principal del ThreadPoolExecutor!
+                print(f"⏳ Esperant {wait_time}s...")
+                time.sleep(wait_time)
 
-    raise TimeoutError(f"Athena query timeout después de {max_wait}s")
+                elapsed += wait_time
+                wait_time = min(wait_time * 2, 60)  # Exponential backoff
+
+            result_queue.put(('timeout', f'Timeout después de {max_wait}s'))
+
+        except Exception as e:
+            result_queue.put(('exception', str(e)))
+
+    # Iniciar thread separado (daemon=True)
+    # Corre en background sin bloquear el thread principal
+    thread = threading.Thread(target=_wait_in_background, daemon=True)
+    thread.start()
+
+    # Esperar resultado (sin bloquear el thread principal)
+    # result_queue.get() retorna cuando el thread background puts algo
+    try:
+        status_type, result = result_queue.get(timeout=max_wait)
+
+        if status_type == 'success':
+            print(f"✅ Query completada (sin bloquear)")
+            return result
+
+        elif status_type == 'error':
+            raise Exception(result)
+
+        elif status_type == 'timeout':
+            raise TimeoutError(result)
+
+        else:  # exception
+            raise Exception(result)
+
+    except queue.Empty:
+        raise TimeoutError(f"Queue timeout después de {max_wait}s")
 
 
 # --- 4. PROCÉS DIARI DIRECTE AMB ATHENA ---
@@ -388,9 +427,8 @@ def process_single_day(process_date, params):
                                                 ResultConfiguration={'OutputLocation': s3_path_output})
         q_id = response['QueryExecutionId']
 
-        # ✅ CORRECTE: Cridar función async desde código sincron
-        # asyncio.run() crea un event loop, executa la función async, i ho torna
-        status_resp = asyncio.run(wait_athena_query_async(athena, q_id))
+        # ✅ CORRECTE: Threading puro (NO bloqueja ThreadPoolExecutor)
+        status_resp = wait_athena_query_threaded(athena, q_id)
 
         if status_resp['QueryExecution']['Status']['State'] != 'SUCCEEDED':
             error_msg = status_resp['QueryExecution']['Status'].get('StateChangeReason', 'Unknown error')
