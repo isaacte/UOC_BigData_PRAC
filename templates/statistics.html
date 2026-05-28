@@ -36,29 +36,6 @@
             color: white !important;
         }
 
-        .stat-card {
-            background: white;
-            border-left: 4px solid var(--aws-orange);
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-
-        .stat-card h5 {
-            color: #666;
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            margin-bottom: 10px;
-            font-weight: 600;
-        }
-
-        .stat-value {
-            font-size: 1.8rem;
-            font-weight: bold;
-            color: var(--aws-orange);
-        }
-
         .filter-card {
             background: white;
             border-radius: 8px;
@@ -82,7 +59,7 @@
             margin-bottom: 8px;
         }
 
-        .form-control, .form-select, .select2-container--default .select2-selection--multiple {
+        .form-control, .form-select {
             border: 1px solid #dee2e6;
             border-radius: 6px;
         }
@@ -166,23 +143,14 @@
             vertical-align: middle;
         }
 
-        .badge-success {
-            background-color: var(--success);
-        }
-
-        .badge-danger {
-            background-color: var(--danger);
-        }
-
-        .badge-info {
-            background-color: var(--info);
-        }
+        .badge-success { background-color: var(--success); }
+        .badge-danger { background-color: var(--danger); }
+        .badge-info { background-color: var(--info); }
 
         .card-chart {
             background: white;
             border-radius: 8px;
             padding: 20px;
-            margin-bottom: 0;
             box-shadow: 0 2px 8px rgba(0,0,0,0.05);
             display: flex;
             flex-direction: column;
@@ -447,7 +415,7 @@
             const dataByUnit = d3.group(window.timeSeriesData, d => d.unit);
 
             dataByUnit.forEach((unitData, unitName) => {
-                const chartDiv = d3.select("#charts-container").append("div").attr("class", "card-chart");
+                const chartDiv = d3.select("#charts-grid").append("div").attr("class", "card-chart");
                 chartDiv.append("h6").text(`Evolució de Gasos (${unitName})`);
 
                 const dataGrouped = d3.group(unitData, d => d.serie_key);
@@ -488,7 +456,7 @@
         function renderBarChart() {
             if (!window.barChartData || window.barChartData.length === 0) return;
 
-            const chartDiv = d3.select("#bar-chart-impact").append("div").attr("class", "card-chart");
+            const chartDiv = d3.select("#charts-grid").append("div").attr("class", "card-chart");
             chartDiv.append("h6").text("Impacte de l'Entorn en la Contaminació");
 
             const container = chartDiv.node();
@@ -532,7 +500,7 @@
             const dataByUnit = d3.group(window.boxplotData, d => d.unitat);
 
             dataByUnit.forEach((unitData, unitName) => {
-                const chartDiv = d3.select("#boxplot-container").append("div").attr("class", "card-chart");
+                const chartDiv = d3.select("#charts-grid").append("div").attr("class", "card-chart");
                 chartDiv.append("h6").text(`Distribució de Contaminants (${unitName})`);
 
                 const container = chartDiv.node();
@@ -584,8 +552,7 @@
         function renderMap() {
             if (!window.mapData || window.mapData.length === 0) return;
 
-            const mapContainer = d3.select("#map-container");
-            const chartDiv = mapContainer.append("div").attr("class", "card-chart");
+            const chartDiv = d3.select("#charts-grid").append("div").attr("class", "card-chart");
             chartDiv.append("h6").text("Distribució de les Estacions");
 
             const mapDiv = chartDiv.append("div").attr("id", "map");
