@@ -1,3 +1,5 @@
+import asyncio
+
 import boto3
 import pymysql
 import sys
@@ -263,6 +265,37 @@ def sync_missing_metadata(df, params):
         conn.close()
 
 
+# ✅ FUNCIÓ ASYNC PER ESPERAR ATHENA (sense bloquear)
+async def wait_athena_query_async(athena, query_id, max_wait=3600):
+    """
+    Esperar Athena query SIN BLOQUEAR el hilo principal
+    - asyncio.sleep() libera el hilo mientras espera
+    - Exponential backoff: 1s → 2s → 4s → 8s → ... → 60s
+    """
+    wait_time = 1
+    elapsed = 0
+
+    while elapsed < max_wait:
+        resp = athena.get_query_execution(QueryExecutionId=query_id)
+        status = resp['QueryExecution']['Status']['State']
+
+        if status == 'SUCCEEDED':
+            print(f"✅ Query completada en {elapsed}s (sin bloquear)")
+            return resp
+
+        elif status in ['FAILED', 'CANCELLED']:
+            raise Exception(f"Athena query {status}")
+
+        # ✅ asyncio.sleep() NO bloqueja el hilo principal
+        print(f"⏳ Esperant {wait_time}s...")
+        await asyncio.sleep(wait_time)
+
+        elapsed += wait_time
+        wait_time = min(wait_time * 2, 60)  # Exponential backoff
+
+    raise TimeoutError(f"Athena query timeout después de {max_wait}s")
+
+
 # --- 4. PROCÉS DIARI DIRECTE AMB ATHENA ---
 def process_single_day(process_date, params):
     fecha_str = process_date.strftime('%Y-%m-%d')
@@ -355,13 +388,11 @@ def process_single_day(process_date, params):
                                                 ResultConfiguration={'OutputLocation': s3_path_output})
         q_id = response['QueryExecutionId']
 
-        status = 'RUNNING'
-        while status in ['RUNNING', 'QUEUED']:
-            time.sleep(3)
-            status_resp = athena.get_query_execution(QueryExecutionId=q_id)
-            status = status_resp['QueryExecution']['Status']['State']
+        # ✅ CORRECTE: Cridar función async desde código sincron
+        # asyncio.run() crea un event loop, executa la función async, i ho torna
+        status_resp = asyncio.run(wait_athena_query_async(athena, q_id))
 
-        if status != 'SUCCEEDED':
+        if status_resp['QueryExecution']['Status']['State'] != 'SUCCEEDED':
             error_msg = status_resp['QueryExecution']['Status'].get('StateChangeReason', 'Unknown error')
             raise Exception(f"Athena error: {error_msg}")
 
