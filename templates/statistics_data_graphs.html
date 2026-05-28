@@ -91,14 +91,17 @@
     </div>
     {% endif %}
 
-    <!-- Gràfics -->
+    <!-- Gràfics en dues columnes -->
     <h3 class="section-title"><i class="bi bi-graph-up"></i> Gràfics i Visualitzacions</h3>
 
-    <div id="charts-container"></div>
-    <div id="bar-chart-impact"></div>
-    <div id="boxplot-container"></div>
+    <div class="charts-grid">
+        <div id="charts-container"></div>
+        <div id="bar-chart-impact"></div>
+        <div id="boxplot-container"></div>
+        <div class="charts-full" id="map-container"></div>
+    </div>
 
-    <!-- Mapa -->
+    <!-- Mapa (full width) -->
     <div class="card-chart">
         <h6><i class="bi bi-geo-alt"></i> Distribució de les Estacions</h6>
         <div id="map"></div>
