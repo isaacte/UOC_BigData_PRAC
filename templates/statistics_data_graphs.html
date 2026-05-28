@@ -1,14 +1,14 @@
 <div class="results-header">
-    <div class="container-fluid">
+    <div class="container-fluid px-4">
         <h2><i class="fas fa-chart-line"></i> Resultats de la Cerca</h2>
     </div>
 </div>
 
-<div class="container-fluid">
+<div class="container-fluid px-4">
     {% if not info.has_data %}
         <div class="alert alert-warning" role="alert">
             <i class="fas fa-exclamation-triangle"></i>
-            <strong>Sense dades.</strong> No s'han trobat registres per als filtres seleccionats.
+            <strong>Sense dades.</strong> No s'han trobat registres que coincideixin amb els filtres seleccionats. Prova a ampliar el rang de dates.
         </div>
     {% else %}
 
@@ -32,7 +32,7 @@
                 <tbody>
                     {% for gas in info.maximum_concentration_gas %}
                     <tr>
-                        <td><strong style="color: var(--aws-orange);">{{ gas.max_concentration }}</strong></td>
+                        <td><strong style="color: #ef4444;">{{ gas.max_concentration }}</strong></td>
                         <td>{{ gas.name_gas }} <span class="text-muted">({{ gas.name_units }})</span></td>
                         <td>{{ gas.date_measurement }}</td>
                         <td>{{ gas.name_municipality }}</td>
@@ -65,7 +65,7 @@
                 <tbody>
                     {% for gas in info.minimum_concentration_gas %}
                     <tr>
-                        <td><strong style="color: #28a745;">{{ gas.min_concentration }}</strong></td>
+                        <td><strong style="color: #10b981;">{{ gas.min_concentration }}</strong></td>
                         <td>{{ gas.name_gas }} <span class="text-muted">({{ gas.name_units }})</span></td>
                         <td>{{ gas.date_measurement }}</td>
                         <td>{{ gas.name_municipality }}</td>
@@ -96,7 +96,7 @@
                     {% for gas in info.avg_concentration_gas %}
                     <tr>
                         <td>{{ gas.name_gas }} <span class="text-muted">({{ gas.name_units }})</span></td>
-                        <td><strong>{{ gas.avg_concentration }}</strong></td>
+                        <td><strong style="color: #3b82f6;">{{ gas.avg_concentration }}</strong></td>
                         {% if info.stations %}<td>{{ gas.name_station }}</td>{% endif %}
                     </tr>
                     {% endfor %}
@@ -112,7 +112,7 @@
 
         <!-- Mapa -->
         <div class="chart-container">
-            <h5><i class="fas fa-map-marker-alt"></i> Distribució de les Estacions</h5>
+            <h5><i class="fas fa-map-marker-alt"></i> Distribució de les Estacions de Monitoratge</h5>
             <div id="map"></div>
         </div>
 
