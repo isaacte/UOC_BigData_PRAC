@@ -24,8 +24,9 @@ sudo systemctl daemon-reload
 sudo systemctl enable flaskapp
 sudo systemctl start flaskapp
 
-# 6.Configurar el cron de l'ETL
+# 6. Configurar el cron de l'ETL
 echo "0 3 * * * ec2-user /usr/bin/python3 /home/ec2-user/app_code/etl.py >> /home/ec2-user/etl_cron.log 2>&1" | sudo tee /etc/cron.d/etl_bdata
 sudo chmod 0644 /etc/cron.d/etl_bdata
 
+# 7. Processament inicial de les dades
 python3 etl.py
